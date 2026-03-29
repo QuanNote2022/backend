@@ -5,16 +5,11 @@ import com.mineral.common.PageResult;
 import com.mineral.dto.ChatSessionResponse;
 import com.mineral.dto.DetectionHistoryQuery;
 import com.mineral.dto.DetectionHistoryResponse;
-import com.mineral.dto.MineralFrequencyResponse;
-import com.mineral.dto.StatsOverviewResponse;
 import com.mineral.service.HistoryService;
-import com.mineral.service.StatsService;
 import javax.servlet.http.HttpServletRequest;
 import javax.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
-
-import java.util.List;
 
 /**
  * 历史记录控制器
