@@ -17,6 +17,7 @@ import reactor.core.publisher.Flux;
 
 import java.io.IOException;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * 聊天控制器
@@ -83,6 +84,22 @@ public class ChatController {
     }
 
     /**
+     * 测试 Ollama 连接（阻塞式，用于诊断）
+     */
+    @GetMapping("/test-ollama")
+    public ApiResponse<String> testOllama() {
+        try {
+            log.info("开始测试 Ollama 连接（阻塞式）");
+            String response = chatService.chatWithOllamaBlocking("test-session", "Hello, 请回复'测试成功'", null);
+            log.info("Ollama 响应: {}", response);
+            return ApiResponse.success("Ollama 连接正常", response);
+        } catch (Exception e) {
+            log.error("Ollama 连接失败", e);
+            return ApiResponse.error(500, "Ollama 连接失败: " + e.getMessage());
+        }
+    }
+
+    /**
      * 删除指定会话
      * @param sessionId 会话 ID
      * @param httpRequest HTTP 请求
@@ -99,10 +116,6 @@ public class ChatController {
 
     /**
      * 发送消息（使用 SSE 流式返回）
-     * @param sessionId 会话 ID
-     * @param request 发送消息请求
-     * @param httpRequest HTTP 请求
-     * @return SSE 发射器
      */
     @PostMapping(value = "/session/{sessionId}/send", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public SseEmitter sendMessage(
@@ -110,85 +123,52 @@ public class ChatController {
             @Valid @RequestBody SendMessageRequest request,
             HttpServletRequest httpRequest) {
         log.info("发送消息：sessionId={}, content={}", sessionId, request.getContent());
-        String userId = (String) httpRequest.getAttribute("userId");
         
-        SseEmitter emitter = new SseEmitter(0L);
+        SseEmitter emitter = new SseEmitter(180_000L);
+        AtomicInteger tokenCount = new AtomicInteger(0);
         
-        try {
-            sendSseResponse(emitter, sessionId, request.getContent(), userId, request.getMineralContext());
-        } catch (IOException e) {
-            emitter.completeWithError(e);
-        }
+        Flux<String> responseFlux = chatService.chatWithOllama(sessionId, request.getContent(), request.getMineralContext());
+        
+        responseFlux.subscribe(
+            token -> {
+                try {
+                    int count = tokenCount.incrementAndGet();
+                    log.info("发送 token #{}: {}", count, token);
+                    emitter.send(SseEmitter.event()
+                        .data("{\"token\": \"" + escapeJson(token) + "\"}"));
+                } catch (IOException e) {
+                    log.error("发送 SSE 消息失败: {}", e.getMessage());
+                }
+            },
+            error -> {
+                log.error("Ollama 调用失败: {}", error.getMessage(), error);
+                try {
+                    emitter.send(SseEmitter.event()
+                        .data("{\"error\": \"" + escapeJson(error.getMessage()) + "\"}"));
+                } catch (IOException ignored) {}
+                emitter.completeWithError(error);
+            },
+            () -> {
+                log.info("流完成，共发送 {} 个 token", tokenCount.get());
+                try {
+                    emitter.send(SseEmitter.event()
+                        .data("{\"done\": true, \"messageId\": \"assistant_" + System.currentTimeMillis() + "\"}"));
+                    emitter.complete();
+                } catch (IOException e) {
+                    log.error("发送完成信号失败: {}", e.getMessage());
+                }
+            }
+        );
         
         return emitter;
     }
 
-    /**
-     * 发送 SSE 响应（私有方法）
-     * @param emitter SSE 发射器
-     * @param sessionId 会话 ID
-     * @param content 消息内容
-     * @param userId 用户 ID
-     * @param mineralContext 矿物上下文
-     * @throws IOException IO 异常
-     */
-    private void sendSseResponse(SseEmitter emitter, String sessionId, String content, String userId, String mineralContext) 
-            throws IOException {
-        log.info("发送 SSE 响应：sessionId={}, content={}, mineralContext={}", sessionId, content, mineralContext);
-
-        // 发送初始思考状态
-        emitter.send(SseEmitter.event()
-                .name("message")
-                .data("{\"token\": \"正在思考...\"}"));
-
-        try {
-            // 调用 ChatService 获取 Ollama 流式响应
-            Flux<String> responseFlux = chatService.chatWithOllama(sessionId, content, mineralContext);
-            
-            // 订阅流式响应并发送到客户端
-            responseFlux.subscribe(
-                token -> {
-                    try {
-                        // 发送 JSON 格式的 token（转义特殊字符）
-                        String jsonData = String.format("{\"token\": \"%s\"}", token.replace("\"", "\\\"").replace("\n", "\\n"));
-                        emitter.send(SseEmitter.event()
-                                .name("message")
-                                .data(jsonData));
-                    } catch (IOException e) {
-                        log.error("发送 SSE 消息失败：{}", e.getMessage());
-                    }
-                },
-                error -> {
-                    log.error("Ollama 调用失败：{}", error.getMessage());
-                    try {
-                        emitter.send(SseEmitter.event()
-                                .name("error")
-                                .data("{\"error\": \"" + error.getMessage() + "\"}"));
-                    } catch (IOException e) {
-                        // ignore
-                    }
-                    emitter.completeWithError(error);
-                },
-                () -> {
-                    // 发送完成信号
-                    String messageId = "assistant_" + System.currentTimeMillis();
-                    try {
-                        emitter.send(SseEmitter.event()
-                                .name("done")
-                                .data(String.format("{\"done\": true, \"messageId\": \"%s\"}", messageId)));
-                        log.info("发送完成");
-                        emitter.complete();
-                    } catch (IOException e) {
-                        log.error("发送完成信号失败：{}", e.getMessage());
-                    }
-                }
-            );
-        } catch (Exception e) {
-            log.error("调用 Ollama 失败：{}", e.getMessage(), e);
-            emitter.send(SseEmitter.event()
-                    .name("error")
-                    .data("{\"error\": \"" + e.getMessage() + "\"}"));
-            emitter.completeWithError(e);
-        }
+    private String escapeJson(String text) {
+        if (text == null) return "";
+        return text.replace("\\", "\\\\")
+                   .replace("\"", "\\\"")
+                   .replace("\n", "\\n")
+                   .replace("\r", "\\r")
+                   .replace("\t", "\\t");
     }
 }

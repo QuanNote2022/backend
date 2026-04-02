@@ -19,6 +19,12 @@ import com.mineral.mapper.DetectionMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.chat.messages.Message;
+import org.springframework.ai.chat.messages.SystemMessage;
+import org.springframework.ai.chat.messages.UserMessage;
+import org.springframework.ai.chat.model.ChatResponse;
+import org.springframework.ai.chat.model.StreamingChatModel;
+import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import reactor.core.publisher.Flux;
@@ -56,6 +62,11 @@ public class ChatService {
      * Spring AI ChatClient（用于调用 Ollama）
      */
     private final ChatClient chatClient;
+
+    /**
+     * Spring AI StreamingChatModel（用于流式调用）
+     */
+    private final StreamingChatModel streamingChatModel;
 
     /**
      * 日期时间格式化器
@@ -222,14 +233,62 @@ public class ChatService {
             ? String.format("[矿物上下文：%s]\n\n用户问题：%s", mineralContext, content)
             : content;
         
-        log.info("调用 Ollama API，sessionId={}, systemPrompt={}, userMessage={}", 
+        log.info("调用 Ollama API（流式），sessionId={}, userMessage={}", sessionId, userMessage);
+        
+        // 构建 Prompt
+        List<Message> messages = List.of(
+            new SystemMessage(systemPrompt),
+            new UserMessage(userMessage)
+        );
+        Prompt prompt = new Prompt(messages);
+        
+        log.info("开始调用 StreamingChatModel.stream()...");
+        
+        // 使用 StreamingChatModel 流式调用
+        Flux<ChatResponse> responseFlux = streamingChatModel.stream(prompt);
+        
+        return responseFlux
+            .doOnSubscribe(s -> log.info("Flux 订阅开始"))
+            .mapNotNull(response -> {
+                if (response.getResult() != null 
+                    && response.getResult().getOutput() != null 
+                    && response.getResult().getOutput().getText() != null) {
+                    String text = response.getResult().getOutput().getText();
+                    log.debug("收到 token: {}", text);
+                    return text;
+                }
+                return null;
+            })
+            .doOnNext(token -> log.info("Flux 发出 token: {}", token))
+            .doOnComplete(() -> log.info("Flux 完成"))
+            .doOnError(e -> log.error("Flux 错误: {}", e.getMessage()));
+    }
+
+    /**
+     * 调用 Ollama API 生成回复（阻塞式，返回完整响应）
+     * 
+     * @param sessionId 会话 ID
+     * @param content 用户消息内容
+     * @param mineralContext 矿物上下文（可选）
+     * @return 完整响应字符串
+     */
+    public String chatWithOllamaBlocking(String sessionId, String content, String mineralContext) {
+        // 构建系统提示词
+        String systemPrompt = buildSystemPrompt(mineralContext);
+        
+        // 构建用户消息
+        String userMessage = mineralContext != null && !mineralContext.isEmpty() 
+            ? String.format("[矿物上下文：%s]\n\n用户问题：%s", mineralContext, content)
+            : content;
+        
+        log.info("调用 Ollama API（阻塞式），sessionId={}, systemPrompt={}, userMessage={}", 
             sessionId, systemPrompt, userMessage);
         
-        // 使用 Spring AI 调用 Ollama（流式）
+        // 使用 Spring AI 调用 Ollama（阻塞式，获取完整响应）
         return chatClient.prompt()
             .system(systemPrompt)
             .user(userMessage)
-            .stream()
+            .call()
             .content();
     }
 

@@ -22,7 +22,7 @@ spring:
     ollama:
       base-url: http://localhost:11434
       chat:
-        model: qwen2.5:7b
+        model: qwen3.5:0.8b
         options:
           temperature: 0.7
           num-predict: 2048
@@ -47,3 +47,7 @@ jwt:
 upload:
   path: D:/mineral-system/uploads/
   max-size: 10485760
+#logging:
+#  level:
+#    com.mineral.service.ChatService: DEBUG
+#    org.springframework.ai: DEBUG
