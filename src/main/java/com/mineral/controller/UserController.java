@@ -5,8 +5,8 @@ import com.mineral.dto.UpdatePasswordRequest;
 import com.mineral.dto.UpdateProfileRequest;
 import com.mineral.dto.UserProfileResponse;
 import com.mineral.service.UserService;
-import javax.servlet.http.HttpServletRequest;
-import javax.validation.Valid;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 

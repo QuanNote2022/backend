@@ -17,8 +17,11 @@ import com.mineral.mapper.ChatMessageMapper;
 import com.mineral.mapper.ChatSessionMapper;
 import com.mineral.mapper.DetectionMapper;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import reactor.core.publisher.Flux;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -29,6 +32,7 @@ import java.util.stream.Collectors;
  * 聊天会话服务类
  * 处理聊天会话创建、消息管理、会话删除等业务
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class ChatService {
@@ -47,6 +51,11 @@ public class ChatService {
      * 识别记录数据访问对象（用于验证关联的识别记录）
      */
     private final DetectionMapper detectionMapper;
+
+    /**
+     * Spring AI ChatClient（用于调用 Ollama）
+     */
+    private final ChatClient chatClient;
 
     /**
      * 日期时间格式化器
@@ -194,5 +203,53 @@ public class ChatService {
         response.setContent(message.getContent());   // 消息内容
         response.setCreatedAt(message.getCreatedAt().format(dateFormatter));
         return response;
+    }
+
+    /**
+     * 调用 Ollama API 生成回复（流式）
+     * 
+     * @param sessionId 会话 ID
+     * @param content 用户消息内容
+     * @param mineralContext 矿物上下文（可选）
+     * @return Flux<String> 流式响应
+     */
+    public Flux<String> chatWithOllama(String sessionId, String content, String mineralContext) {
+        // 构建系统提示词
+        String systemPrompt = buildSystemPrompt(mineralContext);
+        
+        // 构建用户消息
+        String userMessage = mineralContext != null && !mineralContext.isEmpty() 
+            ? String.format("[矿物上下文：%s]\n\n用户问题：%s", mineralContext, content)
+            : content;
+        
+        log.info("调用 Ollama API，sessionId={}, systemPrompt={}, userMessage={}", 
+            sessionId, systemPrompt, userMessage);
+        
+        // 使用 Spring AI 调用 Ollama（流式）
+        return chatClient.prompt()
+            .system(systemPrompt)
+            .user(userMessage)
+            .stream()
+            .content();
+    }
+
+    /**
+     * 构建系统提示词
+     * 
+     * @param mineralContext 矿物上下文
+     * @return 系统提示词
+     */
+    private String buildSystemPrompt(String mineralContext) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("你是一个专业的矿物识别助手，专门帮助用户了解矿物相关知识。\n");
+        sb.append("请用简洁、准确、友好的中文回答用户的问题。\n");
+        
+        if (mineralContext != null && !mineralContext.isEmpty()) {
+            sb.append("当前对话围绕特定矿物展开，请结合以下矿物信息回答：").append(mineralContext).append("\n");
+        }
+        
+        sb.append("如果用户的问题超出你的知识范围，请诚实地告知，不要编造信息。");
+        
+        return sb.toString();
     }
 }

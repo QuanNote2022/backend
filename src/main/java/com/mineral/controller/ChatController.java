@@ -6,13 +6,14 @@ import com.mineral.dto.ChatSessionResponse;
 import com.mineral.dto.CreateSessionRequest;
 import com.mineral.dto.SendMessageRequest;
 import com.mineral.service.ChatService;
-import javax.servlet.http.HttpServletRequest;
-import javax.validation.Valid;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
+import reactor.core.publisher.Flux;
 
 import java.io.IOException;
 import java.util.List;
@@ -114,7 +115,7 @@ public class ChatController {
         SseEmitter emitter = new SseEmitter(0L);
         
         try {
-            sendSseResponse(emitter, sessionId, request.getContent(), userId);
+            sendSseResponse(emitter, sessionId, request.getContent(), userId, request.getMineralContext());
         } catch (IOException e) {
             emitter.completeWithError(e);
         }
@@ -128,39 +129,66 @@ public class ChatController {
      * @param sessionId 会话 ID
      * @param content 消息内容
      * @param userId 用户 ID
+     * @param mineralContext 矿物上下文
      * @throws IOException IO 异常
      */
-    private void sendSseResponse(SseEmitter emitter, String sessionId, String content, String userId) 
+    private void sendSseResponse(SseEmitter emitter, String sessionId, String content, String userId, String mineralContext) 
             throws IOException {
-        log.info("发送 SSE 响应：sessionId={}, content={}", sessionId, content);
+        log.info("发送 SSE 响应：sessionId={}, content={}, mineralContext={}", sessionId, content, mineralContext);
 
         // 发送初始思考状态
         emitter.send(SseEmitter.event()
                 .name("message")
                 .data("{\"token\": \"正在思考...\"}"));
 
-        String[] tokens = {"您", "好", "！"};
-
-        for (String token : tokens) {
-            try {
-                Thread.sleep(200);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-            }
-            // 发送 JSON 格式的 token（转义特殊字符）
-            String jsonData = String.format("{\"token\": \"%s\"}", token.replace("\"", "\\\""));
+        try {
+            // 调用 ChatService 获取 Ollama 流式响应
+            Flux<String> responseFlux = chatService.chatWithOllama(sessionId, content, mineralContext);
+            
+            // 订阅流式响应并发送到客户端
+            responseFlux.subscribe(
+                token -> {
+                    try {
+                        // 发送 JSON 格式的 token（转义特殊字符）
+                        String jsonData = String.format("{\"token\": \"%s\"}", token.replace("\"", "\\\"").replace("\n", "\\n"));
+                        emitter.send(SseEmitter.event()
+                                .name("message")
+                                .data(jsonData));
+                    } catch (IOException e) {
+                        log.error("发送 SSE 消息失败：{}", e.getMessage());
+                    }
+                },
+                error -> {
+                    log.error("Ollama 调用失败：{}", error.getMessage());
+                    try {
+                        emitter.send(SseEmitter.event()
+                                .name("error")
+                                .data("{\"error\": \"" + error.getMessage() + "\"}"));
+                    } catch (IOException e) {
+                        // ignore
+                    }
+                    emitter.completeWithError(error);
+                },
+                () -> {
+                    // 发送完成信号
+                    String messageId = "assistant_" + System.currentTimeMillis();
+                    try {
+                        emitter.send(SseEmitter.event()
+                                .name("done")
+                                .data(String.format("{\"done\": true, \"messageId\": \"%s\"}", messageId)));
+                        log.info("发送完成");
+                        emitter.complete();
+                    } catch (IOException e) {
+                        log.error("发送完成信号失败：{}", e.getMessage());
+                    }
+                }
+            );
+        } catch (Exception e) {
+            log.error("调用 Ollama 失败：{}", e.getMessage(), e);
             emitter.send(SseEmitter.event()
-                    .name("message")
-                    .data(jsonData));
+                    .name("error")
+                    .data("{\"error\": \"" + e.getMessage() + "\"}"));
+            emitter.completeWithError(e);
         }
-
-        // 发送完成信号
-        String messageId = "assistant_" + System.currentTimeMillis();
-        emitter.send(SseEmitter.event()
-                .name("done")
-                .data(String.format("{\"done\": true, \"messageId\": \"%s\"}", messageId)));
-
-        log.info("发送完成");
-        emitter.complete();
     }
 }

@@ -6,8 +6,8 @@ import com.mineral.dto.ChatSessionResponse;
 import com.mineral.dto.DetectionHistoryQuery;
 import com.mineral.dto.DetectionHistoryResponse;
 import com.mineral.service.HistoryService;
-import javax.servlet.http.HttpServletRequest;
-import javax.validation.Valid;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 

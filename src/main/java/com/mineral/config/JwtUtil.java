@@ -4,11 +4,12 @@ import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.SignatureAlgorithm;
 import io.jsonwebtoken.security.Keys;
+import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
-import javax.annotation.PostConstruct;
+
 import javax.crypto.SecretKey;
 import java.nio.charset.StandardCharsets;
 import java.util.Date;
@@ -79,12 +80,12 @@ public class JwtUtil {
 
         // 构建 JWT
         return Jwts.builder()
-                .setClaims(claims)                      // 设置声明
-                .setSubject(subject)                    // 设置主题
-                .setIssuedAt(now)                       // 设置签发时间
-                .setExpiration(expirationDate)          // 设置过期时间
-                .signWith(key, SignatureAlgorithm.HS256) // 使用 HS256 算法签名
-                .compact();                             // 压缩 JWT
+                .claims(claims)                      // 设置声明
+                .subject(subject)                    // 设置主题
+                .issuedAt(now)                       // 设置签发时间
+                .expiration(expirationDate)          // 设置过期时间
+                .signWith(key)                       // 签名
+                .compact();                          // 压缩 JWT
     }
 
     /**
@@ -96,16 +97,16 @@ public class JwtUtil {
     public Claims parseToken(String token) {
         try {
             // 解析 JWT 并获取声明
-            return Jwts.parserBuilder()
-                    .setSigningKey(key)     // 设置签名密钥
+            return Jwts.parser()
+                    .verifyWith(key)     // 设置签名密钥
                     .build()                // 构建解析器
-                    .parseClaimsJws(token)  // 解析 JWT
-                    .getBody();             // 获取声明
-        } catch (Exception e) {
-            // 记录解析失败的日志
+                    .parseSignedClaims(token)  // 解析 JWT 并获取 Claims
+                    .getPayload();             // 获取声明
+          } catch (Exception e) {
+             // 记录解析失败的日志
             log.error("Parse token error: {}", e.getMessage());
             return null;
-        }
+         }
     }
 
     /**

@@ -4,7 +4,7 @@ import com.mineral.common.ApiResponse;
 import com.mineral.dto.MineralFrequencyResponse;
 import com.mineral.dto.StatsOverviewResponse;
 import com.mineral.service.StatsService;
-import javax.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 

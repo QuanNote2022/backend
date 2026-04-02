@@ -1,197 +1,154 @@
-# 快速启动指南
+# 快速开始指南
 
-## 一分钟快速启动
+## 前提条件
 
-### 步骤 1: 初始化数据库
+在开始之前，请确保已安装以下内容：
 
-```bash
-# 打开 MySQL 命令行
-mysql -u root -p
+### 1. JDK 17（必需）
+- 下载：https://www.oracle.com/java/technologies/downloads/#java17
+- 安装后设置环境变量（**重要！**）：
 
-# 执行初始化脚本（替换为实际路径）
-source d:/OneDrive/Desktop/毕业设计/mineral-system/backend/src/main/resources/db/init.sql
-
-# 退出
-exit
+```powershell
+# 以管理员身份运行 PowerShell
+setx JAVA_HOME "C:\Program Files\Java\jdk-17" /M
+setx PATH "%JAVA_HOME%\bin;%PATH%" /M
 ```
 
-### 步骤 2: 修改配置
-
-编辑 `application.yml`，修改数据库密码：
-
-```yaml
-spring:
-  datasource:
-    username: root
-    password: your_password  # 改为你的 MySQL 密码
+验证安装：
+```cmd
+java -version
+# 应该显示 java version "17.x.x"
 ```
 
-### 步骤 3: 启动项目
+### 2. Ollama（用于 AI 聊天）
+1. 下载并安装：https://ollama.ai
+2. 拉取模型：
+   ```cmd
+   ollama pull qwen2.5:7b
+   ```
+3. 启动服务：
+   ```cmd
+   ollama serve
+   ```
 
-**方式一：使用启动脚本（推荐）**
-```bash
-cd d:/OneDrive/Desktop/毕业设计/mineral-system/backend
-start.bat
+### 3. MySQL 数据库
+- 确保 MySQL 正在运行
+- 数据库配置在 `application.yml`
+
+## 快速启动
+
+### 方法 1：使用提供的脚本（推荐）
+
+1. **构建项目**
+   ```cmd
+   build-with-jdk17.bat
+   ```
+
+2. **运行项目**
+   ```cmd
+   run-with-jdk17.bat
+   ```
+
+### 方法 2：手动启动
+
+1. **设置 JAVA_HOME（如果未设置）**
+   ```cmd
+   set JAVA_HOME=C:\Program Files\Java\jdk-17
+   set PATH=%JAVA_HOME%\bin;%PATH%
+   ```
+
+2. **构建项目**
+   ```cmd
+   mvn clean package -DskipTests
+   ```
+
+3. **运行项目**
+   ```cmd
+   java -jar target\mineral-system-1.0.0.jar
+   ```
+
+## 验证运行
+
+应用启动后，会显示：
+```
+Started MineralSystemApplication in X.XXX seconds
 ```
 
-**方式二：使用 Maven 命令**
-```bash
-cd d:/OneDrive/Desktop/毕业设计/mineral-system/backend
-mvn spring-boot:run
-```
+访问 http://localhost:8080/api/auth/register 测试 API
 
-### 步骤 4: 测试接口
+## 测试 AI 聊天功能
 
-**打开浏览器访问：**
-```
-http://localhost:8080/api
-```
+1. **注册用户**
+   ```bash
+   POST http://localhost:8080/api/auth/register
+   Content-Type: application/json
+   
+   {
+     "username": "testuser",
+     "password": "123456",
+     "email": "test@example.com"
+   }
+   ```
 
-**使用 Postman 测试：**
-1. 导入 `postman_collection.json` 到 Postman
-2. 执行 "用户注册" 接口
-3. 执行 "用户登录" 接口（自动保存 Token）
-4. 测试其他接口
+2. **登录获取 Token**
+   ```bash
+   POST http://localhost:8080/api/auth/login
+   Content-Type: application/json
+   
+   {
+     "username": "testuser",
+     "password": "123456"
+   }
+   ```
 
-## 测试账号
+3. **创建聊天会话**
+   ```bash
+   POST http://localhost:8080/api/chat/session
+   Authorization: Bearer <your-token>
+   Content-Type: application/json
+   
+   {
+     "title": "测试会话"
+   }
+   ```
 
-数据库初始化脚本已创建测试账号：
+4. **发送消息（AI 回复）**
+   ```bash
+   POST http://localhost:8080/api/chat/session/{sessionId}/send
+   Authorization: Bearer <your-token>
+   Content-Type: application/json
+   
+   {
+     "content": "你好，请介绍一下石英矿"
+   }
+   ```
 
-```
-用户名：testuser
-密码：123456
-邮箱：test@example.com
-```
+   响应是 SSE 流式返回，你会看到 AI 逐字输出回答。
 
-## 快速测试示例
+## 常见问题
 
-### 1. 注册新用户
+### Q: "JAVA_HOME environment variable is not set"
+**A**: 按照上面的步骤设置 JAVA_HOME 环境变量，然后**重启终端**
 
-```bash
-curl -X POST http://localhost:8080/api/auth/register \
-  -H "Content-Type: application/json" \
-  -d "{\"username\":\"admin\",\"password\":\"123456\",\"email\":\"admin@example.com\"}"
-```
+### Q: Maven 下载依赖很慢
+**A**: 已配置阿里云镜像，首次构建会较慢，请耐心等待
 
-### 2. 登录
+### Q: Ollama 连接失败
+**A**: 
+1. 确保 Ollama 正在运行：`ollama serve`
+2. 确保已下载模型：`ollama list` 应该看到 `qwen2.5:7b`
 
-```bash
-curl -X POST http://localhost:8080/api/auth/login \
-  -H "Content-Type: application/json" \
-  -d "{\"username\":\"admin\",\"password\":\"123456\"}"
-```
-
-保存返回的 token。
-
-### 3. 获取用户信息
-
-```bash
-curl -X GET http://localhost:8080/api/user/profile \
-  -H "Authorization: Bearer YOUR_TOKEN"
-```
-
-### 4. 获取矿物信息
-
-```bash
-curl -X GET http://localhost:8080/api/mineral/info/石英
-```
-
-## 项目结构概览
-
-```
-backend/
-├── src/main/java/com/mineral/
-│   ├── common/           # 通用类（响应、异常、分页）
-│   ├── config/           # 配置类（JWT、Security、CORS）
-│   ├── controller/       # 控制器（6 个）
-│   ├── dto/              # 数据传输对象（20 个）
-│   ├── entity/           # 实体类（6 个）
-│   ├── mapper/           # Mapper 接口（6 个）
-│   └── service/          # 服务类（6 个）
-├── src/main/resources/
-│   ├── application.yml   # 配置文件
-│   └── db/init.sql       # 数据库初始化
-├── README.md             # 详细说明
-├── DEPLOYMENT.md         # 部署指南
-└── API_SPECIFICATION.md  # API 文档
-```
-
-## 接口分类
-
-| 分类 | 路径前缀 | 接口数 |
-|------|---------|--------|
-| 认证 | /auth | 3 |
-| 用户 | /user | 3 |
-| 矿物 | /mineral | 4 |
-| 聊天 | /chat | 5 |
-| 历史 | /history | 3 |
-| 统计 | /stats | 2 |
-
-## 常用命令
-
-### 开发
-```bash
-# 启动项目
-mvn spring-boot:run
-
-# 清理编译
-mvn clean
-
-# 编译项目
-mvn compile
-```
-
-### 打包
-```bash
-# 打包（跳过测试）
-mvn clean package -DskipTests
-
-# 运行 JAR
-java -jar target/mineral-system-1.0.0.jar
-```
-
-### 数据库
-```bash
-# 备份数据库
-mysqldump -u root -p mineral_system > backup.sql
-
-# 恢复数据库
-mysql -u root -p mineral_system < backup.sql
-```
-
-## 故障排查
-
-### 问题 1: 端口被占用
-```
-错误：Port 8080 was already in use
-解决：修改 application.yml 中的 server.port
-```
-
-### 问题 2: 数据库连接失败
-```
-错误：Communications link failure
-解决：检查 MySQL 服务是否启动，密码是否正确
-```
-
-### 问题 3: 编译失败
-```
-错误：找不到或无法加载主类
-解决：确保使用 JDK 17，检查 JAVA_HOME 环境变量
-```
+### Q: 数据库连接失败
+**A**: 检查 `application.yml` 中的数据库配置，确保 MySQL 正在运行
 
 ## 下一步
 
-1. ✅ 完成数据库初始化
-2. ✅ 启动后端服务
-3. ✅ 测试 API 接口
-4. 📝 阅读 API_SPECIFICATION.md 了解详细接口
-5. 📝 阅读 DEPLOYMENT.md 了解部署流程
-6. 📝 阅读 PROJECT_SUMMARY.md 了解项目总结
+- 查看 [UPGRADE_GUIDE.md](UPGRADE_GUIDE.md) 了解详细的升级说明
+- 查看 [API_SPECIFICATION.md](API_SPECIFICATION.md) 了解完整的 API 文档
+- 查看 [README.md](README.md) 了解项目概述
 
----
+## 技术支持
 
-**提示**: 更多详细信息请查看对应文档：
-- 详细说明：README.md
-- 部署指南：DEPLOYMENT.md  
-- API 文档：API_SPECIFICATION.md
-- 项目总结：PROJECT_SUMMARY.md
+如有问题，请查看：
+- Spring AI 文档：https://docs.spring.io/spring-ai/reference/
+- Ollama 文档：https://ollama.ai/

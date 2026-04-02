@@ -5,7 +5,7 @@ import com.mineral.dto.DetectionResponse;
 import com.mineral.dto.MineralCategoryResponse;
 import com.mineral.dto.MineralInfoResponse;
 import com.mineral.service.MineralService;
-import javax.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.*;
