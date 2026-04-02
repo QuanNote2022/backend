@@ -7,7 +7,7 @@ import com.mineral.config.JwtUtil;
 import com.mineral.dto.LoginRequest;
 import com.mineral.dto.LoginResponse;
 import com.mineral.dto.RegisterRequest;
-import com.mineral.entity.User;
+import com.mineral.entity.UserDO;
 import com.mineral.mapper.UserMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -47,37 +47,37 @@ public class AuthService {
     @Transactional(rollbackFor = Exception.class)
     public String register(RegisterRequest request) {
         // 构建查询条件：检查用户名或邮箱是否已存在
-        LambdaQueryWrapper<User> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(User::getUsername, request.getUsername())
+        LambdaQueryWrapper<UserDO> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(UserDO::getUsername, request.getUsername())
                 .or()
-                .eq(User::getEmail, request.getEmail());
+                .eq(UserDO::getEmail, request.getEmail());
         
         // 查询数据库
-        User existingUser = userMapper.selectOne(wrapper);
-        if (existingUser != null) {
+        UserDO existingUserDO = userMapper.selectOne(wrapper);
+        if (existingUserDO != null) {
             // 用户名已存在
-            if (existingUser.getUsername().equals(request.getUsername())) {
+            if (existingUserDO.getUsername().equals(request.getUsername())) {
                 throw new BusinessException(ErrorCode.USERNAME_EXISTS, "用户名已存在");
             }
             // 邮箱已存在
-            if (existingUser.getEmail().equals(request.getEmail())) {
+            if (existingUserDO.getEmail().equals(request.getEmail())) {
                 throw new BusinessException(ErrorCode.EMAIL_EXISTS, "邮箱已存在");
             }
         }
 
         // 创建新用户对象
-        User user = new User();
-        user.setUsername(request.getUsername());                    // 用户名
-        user.setPasswordHash(passwordEncoder.encode(request.getPassword())); // 加密密码
-        user.setEmail(request.getEmail());                          // 邮箱
-        user.setNickname(request.getUsername());                    // 昵称默认为用户名
-        user.setIsActive(true);                                     // 激活状态
+        UserDO userDO = new UserDO();
+        userDO.setUsername(request.getUsername());                    // 用户名
+        userDO.setPasswordHash(passwordEncoder.encode(request.getPassword())); // 加密密码
+        userDO.setEmail(request.getEmail());                          // 邮箱
+        userDO.setNickname(request.getUsername());                    // 昵称默认为用户名
+        userDO.setIsActive(true);                                     // 激活状态
 
         // 插入数据库
-        userMapper.insert(user);
+        userMapper.insert(userDO);
         
         // 返回用户 ID
-        return user.getUserId();
+        return userDO.getUserId();
     }
 
     /**
@@ -89,23 +89,23 @@ public class AuthService {
      */
     public LoginResponse login(LoginRequest request) {
         // 根据用户名查询用户
-        LambdaQueryWrapper<User> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(User::getUsername, request.getUsername());
+        LambdaQueryWrapper<UserDO> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(UserDO::getUsername, request.getUsername());
         
-        User user = userMapper.selectOne(wrapper);
+        UserDO userDO = userMapper.selectOne(wrapper);
         
         // 验证用户是否存在且密码正确
-        if (user == null || !passwordEncoder.matches(request.getPassword(), user.getPasswordHash())) {
+        if (userDO == null || !passwordEncoder.matches(request.getPassword(), userDO.getPasswordHash())) {
             throw new BusinessException(ErrorCode.USERNAME_OR_PASSWORD_ERROR, "用户名或密码错误");
         }
 
         // 检查用户是否被禁用
-        if (!user.getIsActive()) {
+        if (!userDO.getIsActive()) {
             throw new BusinessException(ErrorCode.USER_DISABLED, "用户已被禁用");
         }
 
         // 生成 JWT Token
-        String token = jwtUtil.generateToken(user.getUserId(), user.getUsername());
+        String token = jwtUtil.generateToken(userDO.getUserId(), userDO.getUsername());
         
         // 返回 Token 和过期时间（86400 秒 = 24 小时）
         return new LoginResponse(token, 86400L);

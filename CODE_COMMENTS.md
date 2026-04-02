@@ -160,21 +160,21 @@ wrapper.eq(User::getUsername, request.getUsername())
         .eq(User::getEmail, request.getEmail());
 
 // 2. 如果存在，抛出相应异常
-if (existingUser != null) {
-    if (existingUser.getUsername().equals(request.getUsername())) {
+if (existingUserDO != null) {
+    if (existingUserDO.getUsername().equals(request.getUsername())) {
         throw new BusinessException(ErrorCode.USERNAME_EXISTS, "用户名已存在");
     }
-    if (existingUser.getEmail().equals(request.getEmail())) {
+    if (existingUserDO.getEmail().equals(request.getEmail())) {
         throw new BusinessException(ErrorCode.EMAIL_EXISTS, "邮箱已存在");
     }
 }
 
 // 3. 创建新用户（密码加密）
-User user = new User();
-user.setPasswordHash(passwordEncoder.encode(request.getPassword()));
+User userDO = new User();
+userDO.setPasswordHash(passwordEncoder.encode(request.getPassword()));
 
 // 4. 插入数据库
-userMapper.insert(user);
+userMapper.insert(userDO);
 ```
 
 ### 3. Spring Security 配置流程
@@ -189,8 +189,8 @@ http
     .authorizeHttpRequests()
         // 允许匿名访问的接口
         .antMatchers("/auth/**").permitAll()
-        .antMatchers("/mineral/info/**").permitAll()
-        .antMatchers("/mineral/categories").permitAll()
+        .antMatchers("/mineralDO/info/**").permitAll()
+        .antMatchers("/mineralDO/categories").permitAll()
         // 其他请求需要认证
         .anyRequest().authenticated()
     .and()

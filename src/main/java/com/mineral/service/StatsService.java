@@ -3,9 +3,9 @@ package com.mineral.service;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.mineral.dto.MineralFrequencyResponse;
 import com.mineral.dto.StatsOverviewResponse;
-import com.mineral.entity.ChatSession;
-import com.mineral.entity.Detection;
-import com.mineral.entity.DetectionResult;
+import com.mineral.entity.ChatSessionDO;
+import com.mineral.entity.DetectionDO;
+import com.mineral.entity.DetectionResultDO;
 import com.mineral.mapper.ChatSessionMapper;
 import com.mineral.mapper.DetectionMapper;
 import com.mineral.mapper.DetectionResultMapper;
@@ -51,13 +51,13 @@ public class StatsService {
      */
     public StatsOverviewResponse getStatsOverview(String userId) {
         // 1. 统计总识别次数
-        LambdaQueryWrapper<Detection> detectionWrapper = new LambdaQueryWrapper<>();
-        detectionWrapper.eq(Detection::getUserId, userId);
+        LambdaQueryWrapper<DetectionDO> detectionWrapper = new LambdaQueryWrapper<>();
+        detectionWrapper.eq(DetectionDO::getUserId, userId);
         Long totalDetections = detectionMapper.selectCount(detectionWrapper);
 
         // 2. 统计总会话数
-        LambdaQueryWrapper<ChatSession> chatWrapper = new LambdaQueryWrapper<>();
-        chatWrapper.eq(ChatSession::getUserId, userId);
+        LambdaQueryWrapper<ChatSessionDO> chatWrapper = new LambdaQueryWrapper<>();
+        chatWrapper.eq(ChatSessionDO::getUserId, userId);
         Long totalChats = chatSessionMapper.selectCount(chatWrapper);
 
         // 3. 获取最常识别的矿物
@@ -89,29 +89,29 @@ public class StatsService {
         LocalDateTime startDate = LocalDateTime.now().minusDays(days);
 
         // 2. 查询指定时间范围内的识别记录
-        LambdaQueryWrapper<Detection> detectionWrapper = new LambdaQueryWrapper<>();
-        detectionWrapper.eq(Detection::getUserId, userId)
-                .ge(Detection::getCreatedAt, startDate);
-        List<Detection> detections = detectionMapper.selectList(detectionWrapper);
+        LambdaQueryWrapper<DetectionDO> detectionWrapper = new LambdaQueryWrapper<>();
+        detectionWrapper.eq(DetectionDO::getUserId, userId)
+                .ge(DetectionDO::getCreatedAt, startDate);
+        List<DetectionDO> detectionDOS = detectionMapper.selectList(detectionWrapper);
 
-        if (detections.isEmpty()) {
+        if (detectionDOS.isEmpty()) {
             return new ArrayList<>();
         }
 
         // 3. 提取识别记录 ID 列表
-        List<String> detectIds = detections.stream()
-                .map(Detection::getDetectId)
+        List<String> detectIds = detectionDOS.stream()
+                .map(DetectionDO::getDetectId)
                 .collect(Collectors.toList());
 
         // 4. 查询所有识别结果
-        LambdaQueryWrapper<DetectionResult> resultWrapper = new LambdaQueryWrapper<>();
-        resultWrapper.in(DetectionResult::getDetectId, detectIds);
-        List<DetectionResult> results = detectionResultMapper.selectList(resultWrapper);
+        LambdaQueryWrapper<DetectionResultDO> resultWrapper = new LambdaQueryWrapper<>();
+        resultWrapper.in(DetectionResultDO::getDetectId, detectIds);
+        List<DetectionResultDO> results = detectionResultMapper.selectList(resultWrapper);
 
         // 5. 按矿物名称分组统计频率
         Map<String, Long> frequencyMap = results.stream()
                 .collect(Collectors.groupingBy(
-                        DetectionResult::getLabel,
+                        DetectionResultDO::getLabel,
                         Collectors.counting()
                 ));
 
@@ -136,28 +136,28 @@ public class StatsService {
      */
     private String getTopMineral(String userId) {
         // 1. 查询用户所有识别记录
-        LambdaQueryWrapper<Detection> detectionWrapper = new LambdaQueryWrapper<>();
-        detectionWrapper.eq(Detection::getUserId, userId);
-        List<Detection> detections = detectionMapper.selectList(detectionWrapper);
+        LambdaQueryWrapper<DetectionDO> detectionWrapper = new LambdaQueryWrapper<>();
+        detectionWrapper.eq(DetectionDO::getUserId, userId);
+        List<DetectionDO> detectionDOS = detectionMapper.selectList(detectionWrapper);
 
-        if (detections.isEmpty()) {
+        if (detectionDOS.isEmpty()) {
             return "无";
         }
 
         // 2. 提取识别记录 ID 列表
-        List<String> detectIds = detections.stream()
-                .map(Detection::getDetectId)
+        List<String> detectIds = detectionDOS.stream()
+                .map(DetectionDO::getDetectId)
                 .collect(Collectors.toList());
 
         // 3. 查询所有识别结果
-        LambdaQueryWrapper<DetectionResult> resultWrapper = new LambdaQueryWrapper<>();
-        resultWrapper.in(DetectionResult::getDetectId, detectIds);
-        List<DetectionResult> results = detectionResultMapper.selectList(resultWrapper);
+        LambdaQueryWrapper<DetectionResultDO> resultWrapper = new LambdaQueryWrapper<>();
+        resultWrapper.in(DetectionResultDO::getDetectId, detectIds);
+        List<DetectionResultDO> results = detectionResultMapper.selectList(resultWrapper);
 
         // 4. 按矿物名称分组统计，找出出现次数最多的
         return results.stream()
                 .collect(Collectors.groupingBy(
-                        DetectionResult::getLabel,
+                        DetectionResultDO::getLabel,
                         Collectors.counting()
                 ))
                 .entrySet().stream()
@@ -178,14 +178,14 @@ public class StatsService {
         LocalDateTime startDate = LocalDateTime.now().minusDays(7);
 
         // 2. 查询近 7 天的识别记录
-        LambdaQueryWrapper<Detection> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(Detection::getUserId, userId)
-                .ge(Detection::getCreatedAt, startDate);
+        LambdaQueryWrapper<DetectionDO> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(DetectionDO::getUserId, userId)
+                .ge(DetectionDO::getCreatedAt, startDate);
 
-        List<Detection> detections = detectionMapper.selectList(wrapper);
+        List<DetectionDO> detectionDOS = detectionMapper.selectList(wrapper);
 
         // 3. 提取日期并去重，统计活跃天数
-        return detections.stream()
+        return detectionDOS.stream()
                 .map(d -> d.getCreatedAt().toLocalDate())
                 .distinct()
                 .collect(Collectors.toList())

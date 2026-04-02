@@ -64,7 +64,7 @@ java -version
 
 3. **运行项目**
    ```cmd
-   java -jar target\mineral-system-1.0.0.jar
+   java -jar target\mineralDO-system-1.0.0.jar
    ```
 
 ## 验证运行

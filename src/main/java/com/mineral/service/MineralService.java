@@ -9,9 +9,9 @@ import com.mineral.dto.DetectionResponse;
 import com.mineral.dto.DetectionResultResponse;
 import com.mineral.dto.MineralCategoryResponse;
 import com.mineral.dto.MineralInfoResponse;
-import com.mineral.entity.Detection;
-import com.mineral.entity.DetectionResult;
-import com.mineral.entity.Mineral;
+import com.mineral.entity.DetectionDO;
+import com.mineral.entity.DetectionResultDO;
+import com.mineral.entity.MineralDO;
 import com.mineral.mapper.DetectionMapper;
 import com.mineral.mapper.DetectionResultMapper;
 import com.mineral.mapper.MineralMapper;
@@ -84,17 +84,17 @@ public class MineralService {
         String imageUrl = saveFile(file);
 
         // 3. 创建识别记录
-        Detection detection = new Detection();
-        detection.setDetectId(IdUtil.getSnowflakeNextIdStr());  // 生成唯一 ID
-        detection.setUserId(userId);                            // 用户 ID
-        detection.setImageUrl(imageUrl);                        // 图片 URL
-        detectionMapper.insert(detection);
+        DetectionDO detectionDO = new DetectionDO();
+        detectionDO.setDetectId(IdUtil.getSnowflakeNextIdStr());  // 生成唯一 ID
+        detectionDO.setUserId(userId);                            // 用户 ID
+        detectionDO.setImageUrl(imageUrl);                        // 图片 URL
+        detectionMapper.insert(detectionDO);
 
         // 4. 执行识别（当前为模拟识别）
-        List<DetectionResultResponse> results = simulateDetection(detection.getDetectId());
+        List<DetectionResultResponse> results = simulateDetection(detectionDO.getDetectId());
 
         // 5. 返回识别结果
-        return buildDetectionResponse(detection, results);
+        return buildDetectionResponse(detectionDO, results);
     }
 
     /**
@@ -173,18 +173,18 @@ public class MineralService {
             String mineralName = mineralNames.get(random.nextInt(mineralNames.size()));
             
             // 查询矿物信息
-            LambdaQueryWrapper<Mineral> wrapper = new LambdaQueryWrapper<>();
-            wrapper.eq(Mineral::getName, mineralName);
-            Mineral mineral = mineralMapper.selectOne(wrapper);
+            LambdaQueryWrapper<MineralDO> wrapper = new LambdaQueryWrapper<>();
+            wrapper.eq(MineralDO::getName, mineralName);
+            MineralDO mineralDO = mineralMapper.selectOne(wrapper);
             
-            if (mineral == null) {
+            if (mineralDO == null) {
                 continue;
             }
             
             // 创建识别结果
-            DetectionResult result = new DetectionResult();
+            DetectionResultDO result = new DetectionResultDO();
             result.setDetectId(detectId);
-            result.setLabel(mineral.getName());
+            result.setLabel(mineralDO.getName());
             result.setConfidence(new BigDecimal("0." + (85 + random.nextInt(14)))); // 置信度 0.85-0.98
             result.setBboxX1(100 + random.nextInt(200));  // 边界框坐标
             result.setBboxY1(100 + random.nextInt(200));
@@ -196,13 +196,13 @@ public class MineralService {
             
             // 构建响应对象
             DetectionResultResponse response = new DetectionResultResponse();
-            response.setLabel(mineral.getName());
+            response.setLabel(mineralDO.getName());
             response.setConfidence(result.getConfidence().doubleValue());
             response.setBbox(new Integer[]{result.getBboxX1(), result.getBboxY1(), 
                                          result.getBboxX2(), result.getBboxY2()});
             
             // 添加矿物详细信息
-            MineralInfoResponse mineralInfo = convertToMineralInfo(mineral);
+            MineralInfoResponse mineralInfo = convertToMineralInfo(mineralDO);
             response.setMineralInfo(mineralInfo);
             
             results.add(response);
@@ -221,28 +221,28 @@ public class MineralService {
      */
     public DetectionResponse getDetectionDetail(String detectId, String userId) {
         // 查询识别记录
-        Detection detection = detectionMapper.selectById(detectId);
-        if (detection == null) {
+        DetectionDO detectionDO = detectionMapper.selectById(detectId);
+        if (detectionDO == null) {
             throw new BusinessException(ErrorCode.DETECTION_RECORD_NOT_FOUND, "识别记录不存在");
         }
 
         // 验证权限（只能查看自己的记录）
-        if (!detection.getUserId().equals(userId)) {
+        if (!detectionDO.getUserId().equals(userId)) {
             throw new BusinessException(ErrorCode.UNAUTHORIZED, "无权限访问该识别记录");
         }
 
         // 查询识别结果
-        LambdaQueryWrapper<DetectionResult> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(DetectionResult::getDetectId, detectId);
-        List<DetectionResult> dbResults = detectionResultMapper.selectList(wrapper);
+        LambdaQueryWrapper<DetectionResultDO> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(DetectionResultDO::getDetectId, detectId);
+        List<DetectionResultDO> dbResults = detectionResultMapper.selectList(wrapper);
 
         // 构建响应
         List<DetectionResultResponse> results = new ArrayList<>();
-        for (DetectionResult dbResult : dbResults) {
+        for (DetectionResultDO dbResult : dbResults) {
             // 查询矿物信息
-            LambdaQueryWrapper<Mineral> mineralWrapper = new LambdaQueryWrapper<>();
-            mineralWrapper.eq(Mineral::getName, dbResult.getLabel());
-            Mineral mineral = mineralMapper.selectOne(mineralWrapper);
+            LambdaQueryWrapper<MineralDO> mineralWrapper = new LambdaQueryWrapper<>();
+            mineralWrapper.eq(MineralDO::getName, dbResult.getLabel());
+            MineralDO mineralDO = mineralMapper.selectOne(mineralWrapper);
 
             DetectionResultResponse response = new DetectionResultResponse();
             response.setLabel(dbResult.getLabel());
@@ -250,14 +250,14 @@ public class MineralService {
             response.setBbox(new Integer[]{dbResult.getBboxX1(), dbResult.getBboxY1(),
                                           dbResult.getBboxX2(), dbResult.getBboxY2()});
             
-            if (mineral != null) {
-                response.setMineralInfo(convertToMineralInfo(mineral));
+            if (mineralDO != null) {
+                response.setMineralInfo(convertToMineralInfo(mineralDO));
             }
             
             results.add(response);
         }
 
-        return buildDetectionResponse(detection, results);
+        return buildDetectionResponse(detectionDO, results);
     }
 
     /**
@@ -268,28 +268,28 @@ public class MineralService {
      */
     public List<MineralCategoryResponse> getCategories(String userId) {
         // 查询用户的所有识别记录
-        LambdaQueryWrapper<Detection> detectionWrapper = new LambdaQueryWrapper<>();
-        detectionWrapper.eq(Detection::getUserId, userId);
-        List<Detection> detections = detectionMapper.selectList(detectionWrapper);
+        LambdaQueryWrapper<DetectionDO> detectionWrapper = new LambdaQueryWrapper<>();
+        detectionWrapper.eq(DetectionDO::getUserId, userId);
+        List<DetectionDO> detectionDOS = detectionMapper.selectList(detectionWrapper);
 
-        if (detections.isEmpty()) {
+        if (detectionDOS.isEmpty()) {
             return new ArrayList<>();
         }
 
         // 获取所有识别结果的 ID
-        List<String> detectIds = detections.stream()
-                .map(Detection::getDetectId)
+        List<String> detectIds = detectionDOS.stream()
+                .map(DetectionDO::getDetectId)
                 .collect(Collectors.toList());
 
         // 查询所有识别结果
-        LambdaQueryWrapper<DetectionResult> resultWrapper = new LambdaQueryWrapper<>();
-        resultWrapper.in(DetectionResult::getDetectId, detectIds);
-        List<DetectionResult> results = detectionResultMapper.selectList(resultWrapper);
+        LambdaQueryWrapper<DetectionResultDO> resultWrapper = new LambdaQueryWrapper<>();
+        resultWrapper.in(DetectionResultDO::getDetectId, detectIds);
+        List<DetectionResultDO> results = detectionResultMapper.selectList(resultWrapper);
 
         // 按矿物名称分组统计
         return results.stream()
                 .collect(Collectors.groupingBy(
-                        DetectionResult::getLabel,
+                        DetectionResultDO::getLabel,
                         Collectors.counting()
                 ))
                 .entrySet().stream()
@@ -313,51 +313,51 @@ public class MineralService {
      */
     public MineralInfoResponse getMineralInfo(String mineralName) {
         // 根据名称查询矿物
-        LambdaQueryWrapper<Mineral> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(Mineral::getName, mineralName);
-        Mineral mineral = mineralMapper.selectOne(wrapper);
+        LambdaQueryWrapper<MineralDO> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(MineralDO::getName, mineralName);
+        MineralDO mineralDO = mineralMapper.selectOne(wrapper);
         
-        if (mineral == null) {
+        if (mineralDO == null) {
             throw new BusinessException(ErrorCode.DATA_NOT_FOUND, "矿物信息不存在");
         }
         
-        return convertToMineralInfo(mineral);
+        return convertToMineralInfo(mineralDO);
     }
 
     /**
      * 将矿物实体转换为响应对象
      * 
-     * @param mineral 矿物实体
+     * @param mineralDO 矿物实体
      * @return 矿物信息响应
      */
-    private MineralInfoResponse convertToMineralInfo(Mineral mineral) {
+    private MineralInfoResponse convertToMineralInfo(MineralDO mineralDO) {
         MineralInfoResponse info = new MineralInfoResponse();
-        info.setName(mineral.getName());          // 名称
-        info.setFormula(mineral.getFormula());    // 化学式
-        info.setHardness(mineral.getHardness());  // 硬度
-        info.setLuster(mineral.getLuster());      // 光泽
-        info.setColor(mineral.getColor());        // 颜色
-        info.setOrigin(mineral.getOrigin());      // 产地
-        info.setUses(mineral.getUses());          // 用途
-        info.setDescription(mineral.getDescription()); // 描述
-        info.setThumbnail(mineral.getThumbnail());     // 缩略图
+        info.setName(mineralDO.getName());          // 名称
+        info.setFormula(mineralDO.getFormula());    // 化学式
+        info.setHardness(mineralDO.getHardness());  // 硬度
+        info.setLuster(mineralDO.getLuster());      // 光泽
+        info.setColor(mineralDO.getColor());        // 颜色
+        info.setOrigin(mineralDO.getOrigin());      // 产地
+        info.setUses(mineralDO.getUses());          // 用途
+        info.setDescription(mineralDO.getDescription()); // 描述
+        info.setThumbnail(mineralDO.getThumbnail());     // 缩略图
         return info;
     }
 
     /**
      * 构建识别响应对象
      * 
-     * @param detection 识别记录
+     * @param detectionDO 识别记录
      * @param results 识别结果列表
      * @return 识别响应
      */
-    private DetectionResponse buildDetectionResponse(Detection detection, 
+    private DetectionResponse buildDetectionResponse(DetectionDO detectionDO,
                                                      List<DetectionResultResponse> results) {
         DetectionResponse response = new DetectionResponse();
-        response.setDetectId(detection.getDetectId());
-        response.setImageUrl(detection.getImageUrl());
+        response.setDetectId(detectionDO.getDetectId());
+        response.setImageUrl(detectionDO.getImageUrl());
         response.setResults(results);
-        response.setCreatedAt(detection.getCreatedAt().format(dateFormatter));
+        response.setCreatedAt(detectionDO.getCreatedAt().format(dateFormatter));
         return response;
     }
 }

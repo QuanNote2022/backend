@@ -130,7 +130,7 @@ server:
 mvn spring-boot:run
 
 # 方式 2: 运行 JAR 包
-java -jar target/mineral-system-1.0.0.jar
+java -jar target/mineralDO-system-1.0.0.jar
 
 # 方式 3: 使用启动脚本
 start.bat

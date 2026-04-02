@@ -11,7 +11,7 @@ import java.time.LocalDateTime;
  */
 @Data
 @TableName("detections")
-public class Detection {
+public class DetectionDO {
     /**
      * 检测记录 ID（主键）
      */

@@ -24,8 +24,8 @@ CREATE TABLE users (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='用户表';
 
 -- 识别记录表
-DROP TABLE IF EXISTS detections;
-CREATE TABLE detections (
+DROP TABLE IF EXISTS detectionDOS;
+CREATE TABLE detectionDOS (
   detect_id VARCHAR(64) PRIMARY KEY COMMENT '识别记录 ID',
   user_id VARCHAR(64) NOT NULL COMMENT '用户 ID',
   image_url VARCHAR(512) NOT NULL COMMENT '图片 URL',
@@ -89,7 +89,7 @@ DROP TABLE IF EXISTS chat_messages;
 CREATE TABLE chat_messages (
   message_id VARCHAR(64) PRIMARY KEY COMMENT '消息 ID',
   session_id VARCHAR(64) NOT NULL COMMENT '会话 ID',
-  role ENUM('user', 'assistant') NOT NULL COMMENT '角色',
+  role ENUM('userDO', 'assistant') NOT NULL COMMENT '角色',
   content TEXT NOT NULL COMMENT '消息内容',
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   INDEX idx_session_id (session_id),

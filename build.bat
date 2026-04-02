@@ -20,7 +20,7 @@ call mvn package -DskipTests
 
 echo.
 echo [完成] 打包完成！
-echo [位置] target/mineral-system-1.0.0.jar
+echo [位置] target/mineralDO-system-1.0.0.jar
 echo.
 
 pause

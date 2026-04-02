@@ -1,9 +1,9 @@
 package com.mineral.mapper;
 
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
-import com.mineral.entity.ChatSession;
+import com.mineral.entity.ChatSessionDO;
 import org.apache.ibatis.annotations.Mapper;
 
 @Mapper
-public interface ChatSessionMapper extends BaseMapper<ChatSession> {
+public interface ChatSessionMapper extends BaseMapper<ChatSessionDO> {
 }

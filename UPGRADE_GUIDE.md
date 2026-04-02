@@ -126,7 +126,7 @@ public class ChatService {
         
         return chatClient.prompt()
             .system(systemPrompt)
-            .user(userMessage)
+            .userDO(userMessage)
             .stream()
             .content();
     }
@@ -195,7 +195,7 @@ mvn clean package -DskipTests
 
 ### 运行
 ```bash
-java -jar target/mineral-system-1.0.0.jar
+java -jar target/mineralDO-system-1.0.0.jar
 ```
 
 或者使用 Maven：
@@ -221,7 +221,7 @@ private String buildSystemPrompt(String mineralContext) {
 ### 问题 1：编译错误 "无效的标记：--release"
 **错误信息**: 
 ```
-[ERROR] Failed to execute goal org.apache.maven.plugins:maven-compiler-plugin:3.11.0:compile (default-compile) on project mineral-system: Fatal error compiling: 无效的标记：--release
+[ERROR] Failed to execute goal org.apache.maven.plugins:maven-compiler-plugin:3.11.0:compile (default-compile) on project mineralDO-system: Fatal error compiling: 无效的标记：--release
 ```
 
 **原因**: Maven 使用的 JDK 版本低于 17  

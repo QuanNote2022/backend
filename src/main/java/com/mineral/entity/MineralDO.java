@@ -9,7 +9,7 @@ import lombok.Data;
  */
 @Data
 @TableName("minerals")
-public class Mineral {
+public class MineralDO {
     /**
      * 矿物 ID（主键，自增）
      */

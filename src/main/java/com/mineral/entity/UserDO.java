@@ -11,7 +11,7 @@ import java.time.LocalDateTime;
  */
 @Data
 @TableName("users")
-public class User {
+public class UserDO {
     /**
      * 用户 ID（主键）
      */

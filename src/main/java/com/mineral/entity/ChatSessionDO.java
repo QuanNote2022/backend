@@ -11,7 +11,7 @@ import java.time.LocalDateTime;
  */
 @Data
 @TableName("chat_sessions")
-public class ChatSession {
+public class ChatSessionDO {
     /**
      * 会话 ID（主键）
      */

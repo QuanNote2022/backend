@@ -55,7 +55,7 @@ mvn spring-boot:run
 
 # 方式二：打包后运行
 mvn clean package
-java -jar target/mineral-system-1.0.0.jar
+java -jar target/mineralDO-system-1.0.0.jar
 ```
 
 ### 6. 访问服务
@@ -70,15 +70,15 @@ java -jar target/mineral-system-1.0.0.jar
 - `POST /auth/logout` - 用户登出
 
 ### 用户模块
-- `GET /user/profile` - 获取用户信息
-- `PUT /user/profile` - 更新用户信息
-- `PUT /user/password` - 修改密码
+- `GET /userDO/profile` - 获取用户信息
+- `PUT /userDO/profile` - 更新用户信息
+- `PUT /userDO/password` - 修改密码
 
 ### 矿物识别模块
-- `POST /mineral/detect` - 矿物识别（上传图片）
-- `GET /mineral/detect/{detectId}` - 获取识别详情
-- `GET /mineral/categories` - 获取矿物分类
-- `GET /mineral/info/{mineralName}` - 获取矿物信息
+- `POST /mineralDO/detect` - 矿物识别（上传图片）
+- `GET /mineralDO/detect/{detectId}` - 获取识别详情
+- `GET /mineralDO/categories` - 获取矿物分类
+- `GET /mineralDO/info/{mineralName}` - 获取矿物信息
 
 ### 聊天会话模块
 - `POST /chat/session` - 创建聊天会话
@@ -88,13 +88,13 @@ java -jar target/mineral-system-1.0.0.jar
 - `DELETE /chat/session/{sessionId}` - 删除会话
 
 ### 历史记录模块
-- `GET /history/detections` - 获取识别历史
-- `DELETE /history/detections/{detectId}` - 删除识别记录
+- `GET /history/detectionDOS` - 获取识别历史
+- `DELETE /history/detectionDOS/{detectId}` - 删除识别记录
 - `GET /history/chats` - 获取聊天历史
 
 ### 统计模块
 - `GET /stats/overview` - 获取统计概览
-- `GET /stats/mineral-frequency` - 获取矿物识别频率
+- `GET /stats/mineralDO-frequency` - 获取矿物识别频率
 
 ## 项目结构
 
@@ -102,7 +102,7 @@ java -jar target/mineral-system-1.0.0.jar
 backend/
 ├── src/
 │   ├── main/
-│   │   ├── java/com/mineral/
+│   │   ├── java/com/mineralDO/
 │   │   │   ├── MineralSystemApplication.java  # 启动类
 │   │   │   ├── common/                        # 通用类
 │   │   │   │   ├── ApiResponse.java           # 统一响应
@@ -147,8 +147,8 @@ backend/
 ### 无需认证的接口
 
 - `/auth/**` - 认证相关接口
-- `/mineral/info/**` - 矿物信息查询
-- `/mineral/categories` - 矿物分类列表
+- `/mineralDO/info/**` - 矿物信息查询
+- `/mineralDO/categories` - 矿物分类列表
 
 ## 文件上传
 

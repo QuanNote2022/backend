@@ -10,10 +10,10 @@ import com.mineral.dto.DetectionHistoryQuery;
 import com.mineral.dto.DetectionHistoryResponse;
 import com.mineral.dto.DetectionResultResponse;
 import com.mineral.dto.MineralInfoResponse;
-import com.mineral.entity.ChatSession;
-import com.mineral.entity.Detection;
-import com.mineral.entity.DetectionResult;
-import com.mineral.entity.Mineral;
+import com.mineral.entity.ChatSessionDO;
+import com.mineral.entity.DetectionDO;
+import com.mineral.entity.DetectionResultDO;
+import com.mineral.entity.MineralDO;
 import com.mineral.mapper.ChatSessionMapper;
 import com.mineral.mapper.DetectionMapper;
 import com.mineral.mapper.DetectionResultMapper;
@@ -73,14 +73,14 @@ public class HistoryService {
      */
     public PageResult<DetectionHistoryResponse> getDetectionHistory(String userId, DetectionHistoryQuery query) {
         // 1. 构建查询条件：按用户 ID 过滤
-        LambdaQueryWrapper<Detection> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(Detection::getUserId, userId);
+        LambdaQueryWrapper<DetectionDO> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(DetectionDO::getUserId, userId);
 
         // 2. 关键词搜索：通过矿物名称反查识别记录 ID
         if (query.getKeyword() != null && !query.getKeyword().isEmpty()) {
             List<String> detectIds = getDetectIdsByKeyword(query.getKeyword());
             if (!detectIds.isEmpty()) {
-                wrapper.in(Detection::getDetectId, detectIds);
+                wrapper.in(DetectionDO::getDetectId, detectIds);
             } else {
                 // 未找到匹配的识别记录，返回空结果
                 return PageResult.of(new ArrayList<>(), 0L, query.getPage(), query.getPageSize());
@@ -90,21 +90,21 @@ public class HistoryService {
         // 3. 日期范围筛选：开始日期
         if (query.getStartDate() != null) {
             LocalDateTime start = LocalDate.parse(query.getStartDate()).atStartOfDay();
-            wrapper.ge(Detection::getCreatedAt, start);
+            wrapper.ge(DetectionDO::getCreatedAt, start);
         }
 
         // 4. 日期范围筛选：结束日期（到当天 23:59:59）
         if (query.getEndDate() != null) {
             LocalDateTime end = LocalDate.parse(query.getEndDate()).atTime(23, 59, 59);
-            wrapper.le(Detection::getCreatedAt, end);
+            wrapper.le(DetectionDO::getCreatedAt, end);
         }
 
         // 5. 按创建时间倒序排列
-        wrapper.orderByDesc(Detection::getCreatedAt);
+        wrapper.orderByDesc(DetectionDO::getCreatedAt);
 
         // 6. 执行分页查询
-        Page<Detection> page = new Page<>(query.getPage(), query.getPageSize());
-        Page<Detection> resultPage = detectionMapper.selectPage(page, wrapper);
+        Page<DetectionDO> page = new Page<>(query.getPage(), query.getPageSize());
+        Page<DetectionDO> resultPage = detectionMapper.selectPage(page, wrapper);
 
         // 7. 转换为响应对象
         List<DetectionHistoryResponse> list = resultPage.getRecords().stream()
@@ -123,11 +123,11 @@ public class HistoryService {
      */
     private List<String> getDetectIdsByKeyword(String keyword) {
         // 在识别结果表中模糊匹配矿物名称
-        LambdaQueryWrapper<DetectionResult> resultWrapper = new LambdaQueryWrapper<>();
-        resultWrapper.like(DetectionResult::getLabel, keyword);
-        List<DetectionResult> results = detectionResultMapper.selectList(resultWrapper);
+        LambdaQueryWrapper<DetectionResultDO> resultWrapper = new LambdaQueryWrapper<>();
+        resultWrapper.like(DetectionResultDO::getLabel, keyword);
+        List<DetectionResultDO> results = detectionResultMapper.selectList(resultWrapper);
         // 去重后返回识别记录 ID 列表
-        return results.stream().map(DetectionResult::getDetectId).distinct().collect(Collectors.toList());
+        return results.stream().map(DetectionResultDO::getDetectId).distinct().collect(Collectors.toList());
     }
 
     /**
@@ -140,8 +140,8 @@ public class HistoryService {
      */
     public void deleteDetectionRecord(String detectId, String userId) {
         // 1. 查询并验证识别记录
-        Detection detection = detectionMapper.selectById(detectId);
-        if (detection == null || !detection.getUserId().equals(userId)) {
+        DetectionDO detectionDO = detectionMapper.selectById(detectId);
+        if (detectionDO == null || !detectionDO.getUserId().equals(userId)) {
             throw new BusinessException(ErrorCode.DETECTION_RECORD_NOT_FOUND, "识别记录不存在");
         }
 
@@ -149,8 +149,8 @@ public class HistoryService {
         detectionMapper.deleteById(detectId);
 
         // 3. 级联删除关联的识别结果
-        LambdaQueryWrapper<DetectionResult> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(DetectionResult::getDetectId, detectId);
+        LambdaQueryWrapper<DetectionResultDO> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(DetectionResultDO::getDetectId, detectId);
         detectionResultMapper.delete(wrapper);
     }
 
@@ -164,13 +164,13 @@ public class HistoryService {
      */
     public PageResult<ChatSessionResponse> getChatHistory(String userId, com.mineral.common.PageQuery pageQuery) {
         // 1. 构建查询条件：按用户 ID 过滤，按创建时间倒序
-        LambdaQueryWrapper<ChatSession> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(ChatSession::getUserId, userId)
-                .orderByDesc(ChatSession::getCreatedAt);
+        LambdaQueryWrapper<ChatSessionDO> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(ChatSessionDO::getUserId, userId)
+                .orderByDesc(ChatSessionDO::getCreatedAt);
 
         // 2. 执行分页查询
-        Page<ChatSession> page = new Page<>(pageQuery.getPage(), pageQuery.getPageSize());
-        Page<ChatSession> resultPage = chatSessionMapper.selectPage(page, wrapper);
+        Page<ChatSessionDO> page = new Page<>(pageQuery.getPage(), pageQuery.getPageSize());
+        Page<ChatSessionDO> resultPage = chatSessionMapper.selectPage(page, wrapper);
 
         // 3. 转换为响应对象
         List<ChatSessionResponse> list = resultPage.getRecords().stream()
@@ -194,19 +194,19 @@ public class HistoryService {
      * 将识别记录转换为历史响应对象
      * 包含识别结果和矿物详细信息
      *
-     * @param detection 识别记录实体
+     * @param detectionDO 识别记录实体
      * @return 识别历史响应对象
      */
-    private DetectionHistoryResponse convertToHistoryResponse(Detection detection) {
+    private DetectionHistoryResponse convertToHistoryResponse(DetectionDO detectionDO) {
         DetectionHistoryResponse response = new DetectionHistoryResponse();
-        response.setDetectId(detection.getDetectId());
-        response.setImageUrl(detection.getImageUrl());
-        response.setCreatedAt(detection.getCreatedAt().format(dateFormatter));
+        response.setDetectId(detectionDO.getDetectId());
+        response.setImageUrl(detectionDO.getImageUrl());
+        response.setCreatedAt(detectionDO.getCreatedAt().format(dateFormatter));
 
         // 1. 查询该识别记录的所有识别结果
-        LambdaQueryWrapper<DetectionResult> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(DetectionResult::getDetectId, detection.getDetectId());
-        List<DetectionResult> results = detectionResultMapper.selectList(wrapper);
+        LambdaQueryWrapper<DetectionResultDO> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(DetectionResultDO::getDetectId, detectionDO.getDetectId());
+        List<DetectionResultDO> results = detectionResultMapper.selectList(wrapper);
 
         // 2. 转换每个识别结果
         List<DetectionResultResponse> resultResponses = results.stream()
@@ -219,21 +219,21 @@ public class HistoryService {
                             result.getBboxX2(), result.getBboxY2()});
 
                     // 3. 查询矿物详细信息
-                    LambdaQueryWrapper<Mineral> mineralWrapper = new LambdaQueryWrapper<>();
-                    mineralWrapper.eq(Mineral::getName, result.getLabel());
-                    Mineral mineral = mineralMapper.selectOne(mineralWrapper);
-                    if (mineral != null) {
+                    LambdaQueryWrapper<MineralDO> mineralWrapper = new LambdaQueryWrapper<>();
+                    mineralWrapper.eq(MineralDO::getName, result.getLabel());
+                    MineralDO mineralDO = mineralMapper.selectOne(mineralWrapper);
+                    if (mineralDO != null) {
                         // 构建矿物信息对象
                         MineralInfoResponse info = new MineralInfoResponse();
-                        info.setName(mineral.getName());
-                        info.setFormula(mineral.getFormula());
-                        info.setHardness(mineral.getHardness());
-                        info.setLuster(mineral.getLuster());
-                        info.setColor(mineral.getColor());
-                        info.setOrigin(mineral.getOrigin());
-                        info.setUses(mineral.getUses());
-                        info.setDescription(mineral.getDescription());
-                        info.setThumbnail(mineral.getThumbnail());
+                        info.setName(mineralDO.getName());
+                        info.setFormula(mineralDO.getFormula());
+                        info.setHardness(mineralDO.getHardness());
+                        info.setLuster(mineralDO.getLuster());
+                        info.setColor(mineralDO.getColor());
+                        info.setOrigin(mineralDO.getOrigin());
+                        info.setUses(mineralDO.getUses());
+                        info.setDescription(mineralDO.getDescription());
+                        info.setThumbnail(mineralDO.getThumbnail());
                         resp.setMineralInfo(info);
                     }
 

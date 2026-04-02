@@ -55,10 +55,10 @@ mysql -u root -p
 
 ```sql
 -- 方式一：在 MySQL 命令行中
-source d:/OneDrive/Desktop/毕业设计/mineral-system/backend/src/main/resources/db/init.sql
+source d:/OneDrive/Desktop/毕业设计/mineralDO-system/backend/src/main/resources/db/init.sql
 
 -- 方式二：使用命令行
-mysql -u root -p < d:/OneDrive/Desktop/毕业设计/mineral-system/backend/src/main/resources/db/init.sql
+mysql -u root -p < d:/OneDrive/Desktop/毕业设计/mineralDO-system/backend/src/main/resources/db/init.sql
 ```
 
 ### 3. 验证数据库
@@ -66,7 +66,7 @@ mysql -u root -p < d:/OneDrive/Desktop/毕业设计/mineral-system/backend/src/m
 ```sql
 USE mineral_system;
 SHOW TABLES;
--- 应该看到：users, detections, detection_results, minerals, chat_sessions, chat_messages
+-- 应该看到：users, detectionDOS, detection_results, minerals, chat_sessions, chat_messages
 ```
 
 ## 三、项目配置
@@ -85,7 +85,7 @@ spring:
 ### 2. 创建上传目录
 
 ```bash
-cd d:/OneDrive/Desktop/毕业设计/mineral-system/backend
+cd d:/OneDrive/Desktop/毕业设计/mineralDO-system/backend
 mkdir uploads
 ```
 
@@ -94,14 +94,14 @@ mkdir uploads
 ### 方式一：使用 Maven 命令
 
 ```bash
-cd d:/OneDrive/Desktop/毕业设计/mineral-system/backend
+cd d:/OneDrive/Desktop/毕业设计/mineralDO-system/backend
 mvn clean install
 ```
 
 ### 方式二：使用批处理脚本
 
 ```bash
-cd d:/OneDrive/Desktop/毕业设计/mineral-system/backend
+cd d:/OneDrive/Desktop/毕业设计/mineralDO-system/backend
 build.bat
 ```
 
@@ -110,22 +110,22 @@ build.bat
 ### 方式一：使用 Maven
 
 ```bash
-cd d:/OneDrive/Desktop/毕业设计/mineral-system/backend
+cd d:/OneDrive/Desktop/毕业设计/mineralDO-system/backend
 mvn spring-boot:run
 ```
 
 ### 方式二：使用批处理脚本
 
 ```bash
-cd d:/OneDrive/Desktop/毕业设计/mineral-system/backend
+cd d:/OneDrive/Desktop/毕业设计/mineralDO-system/backend
 start.bat
 ```
 
 ### 方式三：运行 JAR 包
 
 ```bash
-cd d:/OneDrive/Desktop/毕业设计/mineral-system/backend
-java -jar target/mineral-system-1.0.0.jar
+cd d:/OneDrive/Desktop/毕业设计/mineralDO-system/backend
+java -jar target/mineralDO-system-1.0.0.jar
 ```
 
 ## 六、验证服务
@@ -173,7 +173,7 @@ curl -X POST http://localhost:8080/api/auth/login \
 
 **获取用户信息:**
 ```bash
-curl -X GET http://localhost:8080/api/user/profile \
+curl -X GET http://localhost:8080/api/userDO/profile \
   -H "Authorization: Bearer YOUR_TOKEN"
 ```
 
@@ -245,7 +245,7 @@ jwt:
 ### 3. 启动服务
 
 ```bash
-java -jar -Dspring.profiles.active=prod mineral-system-1.0.0.jar
+java -jar -Dspring.profiles.active=prod mineralDO-system-1.0.0.jar
 ```
 
 ### 4. 配置 Nginx（可选）
@@ -274,7 +274,7 @@ server {
 
 ```bash
 # 日志文件位置
-tail -f logs/mineral-system.log
+tail -f logs/mineralDO-system.log
 ```
 
 ### 2. 数据库备份
@@ -294,7 +294,7 @@ mysql -u root -p mineral_system < backup.sql
 ### 1. JVM 参数优化
 
 ```bash
-java -Xms512m -Xmx2g -jar mineral-system-1.0.0.jar
+java -Xms512m -Xmx2g -jar mineralDO-system-1.0.0.jar
 ```
 
 ### 2. 数据库连接池

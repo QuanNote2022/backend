@@ -11,7 +11,7 @@ import java.math.BigDecimal;
  */
 @Data
 @TableName("detection_results")
-public class DetectionResult {
+public class DetectionResultDO {
     /**
      * 主键 ID（自增）
      */

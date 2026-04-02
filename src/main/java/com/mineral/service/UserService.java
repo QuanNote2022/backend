@@ -6,7 +6,7 @@ import com.mineral.common.ErrorCode;
 import com.mineral.dto.UpdatePasswordRequest;
 import com.mineral.dto.UpdateProfileRequest;
 import com.mineral.dto.UserProfileResponse;
-import com.mineral.entity.User;
+import com.mineral.entity.UserDO;
 import com.mineral.mapper.UserMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -47,19 +47,19 @@ public class UserService {
      */
     public UserProfileResponse getProfile(String userId) {
         // 根据 ID 查询用户
-        User user = userMapper.selectById(userId);
-        if (user == null) {
+        UserDO userDO = userMapper.selectById(userId);
+        if (userDO == null) {
             throw new BusinessException(ErrorCode.DATA_NOT_FOUND, "用户不存在");
         }
 
         // 构建响应对象
         UserProfileResponse response = new UserProfileResponse();
-        response.setUserId(user.getUserId());                 // 用户 ID
-        response.setUsername(user.getUsername());             // 用户名
-        response.setEmail(user.getEmail());                   // 邮箱
-        response.setAvatar(user.getAvatar());                 // 头像 URL
-        response.setNickname(user.getNickname());             // 昵称
-        response.setCreatedAt(user.getCreatedAt().format(dateFormatter)); // 创建时间
+        response.setUserId(userDO.getUserId());                 // 用户 ID
+        response.setUsername(userDO.getUsername());             // 用户名
+        response.setEmail(userDO.getEmail());                   // 邮箱
+        response.setAvatar(userDO.getAvatar());                 // 头像 URL
+        response.setNickname(userDO.getNickname());             // 昵称
+        response.setCreatedAt(userDO.getCreatedAt().format(dateFormatter)); // 创建时间
         return response;
     }
 
@@ -74,44 +74,44 @@ public class UserService {
     @Transactional(rollbackFor = Exception.class)
     public UserProfileResponse updateProfile(String userId, UpdateProfileRequest request) {
         // 查询用户是否存在
-        User user = userMapper.selectById(userId);
-        if (user == null) {
+        UserDO userDO = userMapper.selectById(userId);
+        if (userDO == null) {
             throw new BusinessException(ErrorCode.DATA_NOT_FOUND, "用户不存在");
         }
 
         // 如果要更新邮箱，检查是否已被其他用户使用
-        if (request.getEmail() != null && !request.getEmail().equals(user.getEmail())) {
-            LambdaQueryWrapper<User> wrapper = new LambdaQueryWrapper<>();
-            wrapper.eq(User::getEmail, request.getEmail())
-                    .ne(User::getUserId, userId);  // 排除当前用户
+        if (request.getEmail() != null && !request.getEmail().equals(userDO.getEmail())) {
+            LambdaQueryWrapper<UserDO> wrapper = new LambdaQueryWrapper<>();
+            wrapper.eq(UserDO::getEmail, request.getEmail())
+                    .ne(UserDO::getUserId, userId);  // 排除当前用户
             
             if (userMapper.selectOne(wrapper) != null) {
                 throw new BusinessException(ErrorCode.EMAIL_EXISTS, "邮箱已被使用");
             }
-            user.setEmail(request.getEmail());
+            userDO.setEmail(request.getEmail());
         }
 
         // 更新头像（如果提供）
         if (request.getAvatar() != null) {
-            user.setAvatar(request.getAvatar());
+            userDO.setAvatar(request.getAvatar());
         }
 
         // 更新昵称（如果提供）
         if (request.getNickname() != null) {
-            user.setNickname(request.getNickname());
+            userDO.setNickname(request.getNickname());
         }
 
         // 更新到数据库
-        userMapper.updateById(user);
+        userMapper.updateById(userDO);
 
         // 返回更新后的用户信息
         UserProfileResponse response = new UserProfileResponse();
-        response.setUserId(user.getUserId());
-        response.setUsername(user.getUsername());
-        response.setEmail(user.getEmail());
-        response.setAvatar(user.getAvatar());
-        response.setNickname(user.getNickname());
-        response.setCreatedAt(user.getCreatedAt().format(dateFormatter));
+        response.setUserId(userDO.getUserId());
+        response.setUsername(userDO.getUsername());
+        response.setEmail(userDO.getEmail());
+        response.setAvatar(userDO.getAvatar());
+        response.setNickname(userDO.getNickname());
+        response.setCreatedAt(userDO.getCreatedAt().format(dateFormatter));
         return response;
     }
 
@@ -125,18 +125,18 @@ public class UserService {
     @Transactional(rollbackFor = Exception.class)
     public void updatePassword(String userId, UpdatePasswordRequest request) {
         // 查询用户是否存在
-        User user = userMapper.selectById(userId);
-        if (user == null) {
+        UserDO userDO = userMapper.selectById(userId);
+        if (userDO == null) {
             throw new BusinessException(ErrorCode.DATA_NOT_FOUND, "用户不存在");
         }
 
         // 验证原密码是否正确
-        if (!passwordEncoder.matches(request.getOldPassword(), user.getPasswordHash())) {
+        if (!passwordEncoder.matches(request.getOldPassword(), userDO.getPasswordHash())) {
             throw new BusinessException(ErrorCode.OLD_PASSWORD_ERROR, "原密码错误");
         }
 
         // 加密新密码并更新
-        user.setPasswordHash(passwordEncoder.encode(request.getNewPassword()));
-        userMapper.updateById(user);
+        userDO.setPasswordHash(passwordEncoder.encode(request.getNewPassword()));
+        userMapper.updateById(userDO);
     }
 }

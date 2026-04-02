@@ -1,12 +1,12 @@
 # 项目文件结构
 
 ```
-mineral-system/
+mineralDO-system/
 │
 ├── backend/                                    # 后端项目根目录
 │   ├── src/
 │   │   ├── main/
-│   │   │   ├── java/com/mineral/              # Java 源代码
+│   │   │   ├── java/com/mineralDO/              # Java 源代码
 │   │   │   │   │
 │   │   │   │   ├── MineralSystemApplication.java    # 🚀 主启动类
 │   │   │   │   │
@@ -171,7 +171,7 @@ mineral-system/
                           ↓
 ┌─────────────────────────────────────────────────────┐
 │                  Database                           │
-│         (MySQL: users/detections/minerals/...)      │
+│         (MySQL: users/detectionDOS/minerals/...)      │
 └─────────────────────────────────────────────────────┘
 ```
 
@@ -195,12 +195,12 @@ application.yml
 │   ├── POST /login
 │   └── POST /logout
 │
-├── /user          # 用户模块
+├── /userDO          # 用户模块
 │   ├── GET  /profile
 │   ├── PUT  /profile
 │   └── PUT  /password
 │
-├── /mineral       # 矿物识别模块
+├── /mineralDO       # 矿物识别模块
 │   ├── POST /detect
 │   ├── GET  /detect/{id}
 │   ├── GET  /categories
@@ -214,35 +214,35 @@ application.yml
 │   └── DELETE /session/{id}
 │
 ├── /history       # 历史记录模块
-│   ├── GET  /detections
-│   ├── DELETE /detections/{id}
+│   ├── GET  /detectionDOS
+│   ├── DELETE /detectionDOS/{id}
 │   └── GET  /chats
 │
 └── /stats         # 统计模块
     ├── GET  /overview
-    └── GET  /mineral-frequency
+    └── GET  /mineralDO-frequency
 ```
 
 ## 数据库表关系
 
 ```
 users (用户表)
-    ├── 1:N → detections (识别记录)
+    ├── 1:N → detectionDOS (识别记录)
     └── 1:N → chat_sessions (聊天会话)
 
-detections (识别记录表)
+detectionDOS (识别记录表)
     ├── N:1 → users (用户表)
     └── 1:N → detection_results (识别结果)
 
 detection_results (识别结果表)
-    └── N:1 → detections (识别记录)
+    └── N:1 → detectionDOS (识别记录)
 
 minerals (矿物信息表)
     └── 被 detection_results 引用
 
 chat_sessions (聊天会话表)
     ├── N:1 → users (用户表)
-    ├── 1:1 → detections (识别记录，可选)
+    ├── 1:1 → detectionDOS (识别记录，可选)
     └── 1:N → chat_messages (聊天消息)
 
 chat_messages (聊天消息表)

@@ -68,7 +68,7 @@
 
 ```
 backend/
-├── src/main/java/com/mineral/
+├── src/main/java/com/mineralDO/
 │   ├── MineralSystemApplication.java    # 启动类
 │   ├── common/                          # 通用模块
 │   │   ├── ApiResponse.java             # 统一响应格式
@@ -131,7 +131,7 @@ backend/
    - 存储用户基本信息、密码哈希
    - 支持逻辑删除
 
-2. **detections** - 矿物识别记录表
+2. **detectionDOS** - 矿物识别记录表
    - 存储识别记录、图片 URL
    - 关联用户 ID
 
@@ -252,13 +252,13 @@ mvn spring-boot:run
 mvn clean package -DskipTests
 
 # 运行
-java -jar target/mineral-system-1.0.0.jar
+java -jar target/mineralDO-system-1.0.0.jar
 ```
 
 ### 容器化部署（Docker）
 ```dockerfile
 FROM openjdk:17-slim
-COPY target/mineral-system-1.0.0.jar app.jar
+COPY target/mineralDO-system-1.0.0.jar app.jar
 EXPOSE 8080
 ENTRYPOINT ["java", "-jar", "/app.jar"]
 ```

@@ -168,7 +168,7 @@ Authorization: Bearer <token>
 
 ### 3.1 获取用户信息
 
-**接口**: `GET /user/profile`
+**接口**: `GET /userDO/profile`
 
 **描述**: 获取当前登录用户的详细信息
 
@@ -203,7 +203,7 @@ Authorization: Bearer <token>
 
 ### 3.2 更新用户信息
 
-**接口**: `PUT /user/profile`
+**接口**: `PUT /userDO/profile`
 
 **描述**: 更新当前用户的基本信息
 
@@ -250,7 +250,7 @@ Authorization: Bearer <token>
 
 ### 3.3 修改密码
 
-**接口**: `PUT /user/password`
+**接口**: `PUT /userDO/password`
 
 **描述**: 修改当前用户的登录密码
 
@@ -291,7 +291,7 @@ Authorization: Bearer <token>
 
 ### 4.1 矿物识别
 
-**接口**: `POST /mineral/detect`
+**接口**: `POST /mineralDO/detect`
 
 **描述**: 上传矿物图片进行识别
 
@@ -360,7 +360,7 @@ image: File    // 图片文件，必填，支持 JPG/PNG 格式，最大 10MB
 
 ### 4.2 获取识别详情
 
-**接口**: `GET /mineral/detect/{detectId}`
+**接口**: `GET /mineralDO/detect/{detectId}`
 
 **描述**: 根据 ID 获取矿物识别的详细信息
 
@@ -416,7 +416,7 @@ detectId: string    // 识别记录 ID
 
 ### 4.3 获取矿物分类列表
 
-**接口**: `GET /mineral/categories`
+**接口**: `GET /mineralDO/categories`
 
 **描述**: 获取所有矿物分类及其数量统计
 
@@ -461,7 +461,7 @@ Authorization: Bearer <token>
 
 ### 4.4 获取矿物详细信息
 
-**接口**: `GET /mineral/info/{mineralName}`
+**接口**: `GET /mineralDO/info/{mineralName}`
 
 **描述**: 根据矿物名称获取详细信息
 
@@ -630,7 +630,7 @@ sessionId: string    // 会话 ID
     {
       "messageId": "msg_001",
       "sessionId": "sess_123456789",
-      "role": "user",
+      "role": "userDO",
       "content": "石英的硬度是多少？",
       "createdAt": "2024-01-01T12:05:00Z"
     },
@@ -760,7 +760,7 @@ sessionId: string    // 会话 ID
 
 ### 6.1 获取识别历史
 
-**接口**: `GET /history/detections`
+**接口**: `GET /history/detectionDOS`
 
 **描述**: 获取用户的矿物识别历史记录（分页、筛选）
 
@@ -829,7 +829,7 @@ endDate: string    // 可选，结束日期（ISO 8601 格式）
 
 ### 6.2 删除识别记录
 
-**接口**: `DELETE /history/detections/{detectId}`
+**接口**: `DELETE /history/detectionDOS/{detectId}`
 
 **描述**: 删除指定的矿物识别记录
 
@@ -951,7 +951,7 @@ Authorization: Bearer <token>
 
 ### 7.2 获取矿物识别频率
 
-**接口**: `GET /stats/mineral-frequency`
+**接口**: `GET /stats/mineralDO-frequency`
 
 **描述**: 获取用户矿物识别频率统计
 
@@ -1086,10 +1086,10 @@ CREATE TABLE users (
 );
 ```
 
-### 9.2 识别记录表 (detections)
+### 9.2 识别记录表 (detectionDOS)
 
 ```sql
-CREATE TABLE detections (
+CREATE TABLE detectionDOS (
   detect_id VARCHAR(64) PRIMARY KEY,
   user_id VARCHAR(64) NOT NULL,
   image_url VARCHAR(512) NOT NULL,
@@ -1111,7 +1111,7 @@ CREATE TABLE detection_results (
   bbox_y1 INT,
   bbox_x2 INT,
   bbox_y2 INT,
-  FOREIGN KEY (detect_id) REFERENCES detections(detect_id),
+  FOREIGN KEY (detect_id) REFERENCES detectionDOS(detect_id),
   INDEX idx_detect_id (detect_id)
 );
 ```
@@ -1146,7 +1146,7 @@ CREATE TABLE chat_sessions (
   last_active_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (user_id) REFERENCES users(user_id),
-  FOREIGN KEY (detect_id) REFERENCES detections(detect_id),
+  FOREIGN KEY (detect_id) REFERENCES detectionDOS(detect_id),
   INDEX idx_user_last_active (user_id, last_active_at)
 );
 ```
@@ -1157,7 +1157,7 @@ CREATE TABLE chat_sessions (
 CREATE TABLE chat_messages (
   message_id VARCHAR(64) PRIMARY KEY,
   session_id VARCHAR(64) NOT NULL,
-  role ENUM('user', 'assistant') NOT NULL,
+  role ENUM('userDO', 'assistant') NOT NULL,
   content TEXT NOT NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (session_id) REFERENCES chat_sessions(session_id) ON DELETE CASCADE,
