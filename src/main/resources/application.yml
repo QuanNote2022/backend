@@ -9,7 +9,7 @@ spring:
   datasource:
     url: jdbc:mysql://localhost:3306/mineral_system?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
     username: root
-    password: root
+    password: shd12345
     driver-class-name: com.mysql.cj.jdbc.Driver
   servlet:
     multipart:
@@ -37,5 +37,5 @@ jwt:
   prefix: Bearer 
 
 upload:
-  path: ./uploads/
+  path: D:/mineral-system/uploads/
   max-size: 10485760

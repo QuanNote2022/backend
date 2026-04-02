@@ -9,6 +9,7 @@ import com.mineral.service.ChatService;
 import javax.servlet.http.HttpServletRequest;
 import javax.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
@@ -20,6 +21,7 @@ import java.util.List;
  * 聊天控制器
  * 处理聊天会话管理、消息发送等请求
  */
+@Slf4j
 @RestController
 @RequestMapping("/chat")
 @RequiredArgsConstructor
@@ -106,6 +108,7 @@ public class ChatController {
             @PathVariable String sessionId,
             @Valid @RequestBody SendMessageRequest request,
             HttpServletRequest httpRequest) {
+        log.info("发送消息：sessionId={}, content={}", sessionId, request.getContent());
         String userId = (String) httpRequest.getAttribute("userId");
         
         SseEmitter emitter = new SseEmitter(0L);
@@ -129,19 +132,35 @@ public class ChatController {
      */
     private void sendSseResponse(SseEmitter emitter, String sessionId, String content, String userId) 
             throws IOException {
-        emitter.send("正在思考...");
-        
+        log.info("发送 SSE 响应：sessionId={}, content={}", sessionId, content);
+
+        // 发送初始思考状态
+        emitter.send(SseEmitter.event()
+                .name("message")
+                .data("{\"token\": \"正在思考...\"}"));
+
         String[] tokens = {"您", "好", "！"};
-        
+
         for (String token : tokens) {
             try {
                 Thread.sleep(200);
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
             }
-            emitter.send(token);
+            // 发送 JSON 格式的 token（转义特殊字符）
+            String jsonData = String.format("{\"token\": \"%s\"}", token.replace("\"", "\\\""));
+            emitter.send(SseEmitter.event()
+                    .name("message")
+                    .data(jsonData));
         }
-        
+
+        // 发送完成信号
+        String messageId = "assistant_" + System.currentTimeMillis();
+        emitter.send(SseEmitter.event()
+                .name("done")
+                .data(String.format("{\"done\": true, \"messageId\": \"%s\"}", messageId)));
+
+        log.info("发送完成");
         emitter.complete();
     }
 }

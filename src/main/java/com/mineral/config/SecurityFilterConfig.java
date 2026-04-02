@@ -3,6 +3,7 @@ package com.mineral.config;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.method.configuration.EnableGlobalMethodSecurity;
@@ -44,6 +45,8 @@ public class SecurityFilterConfig {
             .and()
             // 配置请求授权规则
             .authorizeHttpRequests()
+                // 允许 CORS 预检请求（OPTIONS）
+                .antMatchers(HttpMethod.OPTIONS).permitAll()
                 // 允许匿名访问认证相关接口
                 .antMatchers("/auth/**").permitAll()
                 // 允许匿名访问矿物信息查询接口

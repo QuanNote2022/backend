@@ -20,6 +20,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -82,6 +83,7 @@ public class ChatService {
         session.setMineralName(request.getMineralName());      // 矿物名称
         session.setDetectId(request.getDetectId());            // 关联的识别记录 ID
         session.setMessageCount(0);                            // 初始消息数为 0
+        session.setLastActiveAt(LocalDateTime.now());          // 设置最后活跃时间
 
         chatSessionMapper.insert(session);
 

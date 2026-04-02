@@ -41,7 +41,7 @@ public class ApiResponse<T> implements Serializable {
      */
     public static <T> ApiResponse<T> success(T data) {
         ApiResponse<T> response = new ApiResponse<>();
-        response.setCode(0);
+        response.setCode(200);
         response.setMessage("success");
         response.setData(data);
         return response;
@@ -55,7 +55,7 @@ public class ApiResponse<T> implements Serializable {
      */
     public static <T> ApiResponse<T> success(String message, T data) {
         ApiResponse<T> response = new ApiResponse<>();
-        response.setCode(0);
+        response.setCode(200);
         response.setMessage(message);
         response.setData(data);
         return response;
