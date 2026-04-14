@@ -15,6 +15,7 @@ import com.mineral.entity.MineralDO;
 import com.mineral.mapper.DetectionMapper;
 import com.mineral.mapper.DetectionResultMapper;
 import com.mineral.mapper.MineralMapper;
+import com.mineral.service.UserStatsService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -57,6 +58,11 @@ public class MineralService {
     private final MineralMapper mineralMapper;
 
     /**
+     * 用户统计服务
+     */
+    private final UserStatsService userStatsService;
+
+    /**
      * 日期时间格式化器
      */
     private final DateTimeFormatter dateFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
@@ -93,7 +99,10 @@ public class MineralService {
         // 4. 执行识别（当前为模拟识别）
         List<DetectionResultResponse> results = simulateDetection(detectionDO.getDetectId());
 
-        // 5. 返回识别结果
+        // 5. 更新用户统计数据
+        userStatsService.updateUserStats(userId, "detection");
+
+        // 6. 返回识别结果
         return buildDetectionResponse(detectionDO, results);
     }
 

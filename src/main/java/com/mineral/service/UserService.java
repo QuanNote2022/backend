@@ -8,6 +8,7 @@ import com.mineral.dto.UpdateProfileRequest;
 import com.mineral.dto.UserProfileResponse;
 import com.mineral.entity.UserDO;
 import com.mineral.mapper.UserMapper;
+import com.mineral.service.UserStatsService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -32,6 +33,11 @@ public class UserService {
      * 密码编码器（BCrypt）
      */
     private final PasswordEncoder passwordEncoder;
+
+    /**
+     * 用户统计服务
+     */
+    private final UserStatsService userStatsService;
 
     /**
      * 日期时间格式化器

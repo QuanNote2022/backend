@@ -18,6 +18,7 @@ import com.mineral.entity.DetectionDO;
 import com.mineral.mapper.ChatMessageMapper;
 import com.mineral.mapper.ChatSessionMapper;
 import com.mineral.mapper.DetectionMapper;
+import com.mineral.service.UserStatsService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -49,6 +50,7 @@ public class ChatService {
     private final DetectionMapper detectionMapper;
     private final WebClient.Builder webClientBuilder;
     private final ObjectMapper objectMapper;
+    private final UserStatsService userStatsService;
 
     @Value("${ollama.base-url:http://localhost:11434}")
     private String ollamaBaseUrl;
@@ -83,6 +85,9 @@ public class ChatService {
         session.setLastActiveAt(LocalDateTime.now());
 
         chatSessionMapper.insert(session);
+
+        // 更新用户统计数据
+        userStatsService.updateUserStats(userId, "chat");
 
         return convertToResponse(session);
     }
