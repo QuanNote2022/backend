@@ -22,7 +22,20 @@
         <java.version>17</java.version>
         <jjwt.version>0.12.5</jjwt.version>
         <mybatis-plus.version>3.5.15</mybatis-plus.version>
+        <langchain4j.version>1.0.0-beta3</langchain4j.version>
     </properties>
+    
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>dev.langchain4j</groupId>
+                <artifactId>langchain4j-bom</artifactId>
+                <version>${langchain4j.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
     
     <dependencies>
         <!-- Spring Boot Web -->
@@ -59,7 +72,7 @@
         <dependency>
             <groupId>com.baomidou</groupId>
             <artifactId>mybatis-plus-jsqlparser</artifactId>
-            <version>${mybatis-plus.version}</version> <!-- 确保版本和 MyBatis Plus 主包一致 -->
+            <version>${mybatis-plus.version}</version>
         </dependency>
         
         <!-- MySQL Driver -->
@@ -100,6 +113,30 @@
             <groupId>cn.hutool</groupId>
             <artifactId>hutool-all</artifactId>
             <version>5.8.24</version>
+        </dependency>
+        
+        <!-- LangChain4j Core -->
+        <dependency>
+            <groupId>dev.langchain4j</groupId>
+            <artifactId>langchain4j</artifactId>
+        </dependency>
+        
+        <!-- LangChain4j OpenAI (兼容阿里云DashScope) -->
+        <dependency>
+            <groupId>dev.langchain4j</groupId>
+            <artifactId>langchain4j-open-ai</artifactId>
+        </dependency>
+        
+        <!-- LangChain4j Redis -->
+        <dependency>
+            <groupId>dev.langchain4j</groupId>
+            <artifactId>langchain4j-redis</artifactId>
+            <version>0.36.2</version>
+        </dependency>
+        <!-- Spring Boot Data Redis -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-redis</artifactId>
         </dependency>
         
         <!-- Spring Boot Test -->

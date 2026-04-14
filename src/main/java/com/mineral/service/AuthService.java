@@ -13,6 +13,9 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
+import jakarta.servlet.http.HttpServletRequest;
 
 /**
  * 认证服务类
@@ -36,6 +39,16 @@ public class AuthService {
      * JWT 工具类
      */
     private final JwtUtil jwtUtil;
+
+    /**
+     * 登录设备服务
+     */
+    private final LoginDeviceService loginDeviceService;
+
+    /**
+     * 用户偏好服务
+     */
+    private final UserPreferencesService userPreferencesService;
 
     /**
      * 用户注册
@@ -76,6 +89,9 @@ public class AuthService {
         // 插入数据库
         userMapper.insert(userDO);
         
+        // 初始化用户偏好设置
+        userPreferencesService.initUserPreferences(userDO.getUserId());
+        
         // 返回用户 ID
         return userDO.getUserId();
     }
@@ -88,6 +104,10 @@ public class AuthService {
      * @throws BusinessException 用户名或密码错误、用户被禁用时抛出
      */
     public LoginResponse login(LoginRequest request) {
+        // 获取 HTTP 请求
+        HttpServletRequest httpServletRequest = ((ServletRequestAttributes) RequestContextHolder.getRequestAttributes()).getRequest();
+        String ipAddress = httpServletRequest.getRemoteAddr();
+        
         // 根据用户名查询用户
         LambdaQueryWrapper<UserDO> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(UserDO::getUsername, request.getUsername());
@@ -96,6 +116,14 @@ public class AuthService {
         
         // 验证用户是否存在且密码正确
         if (userDO == null || !passwordEncoder.matches(request.getPassword(), userDO.getPasswordHash())) {
+            // 记录失败的登录历史
+            loginDeviceService.recordLoginHistory(
+                request.getUsername(), 
+                "未知设备", 
+                ipAddress, 
+                "failed", 
+                "未知"
+            );
             throw new BusinessException(ErrorCode.USERNAME_OR_PASSWORD_ERROR, "用户名或密码错误");
         }
 
@@ -107,8 +135,90 @@ public class AuthService {
         // 生成 JWT Token
         String token = jwtUtil.generateToken(userDO.getUserId(), userDO.getUsername());
         
+        // 记录登录设备
+        String userAgent = httpServletRequest.getHeader("User-Agent");
+        java.util.Map<String, String> deviceInfo = parseUserAgent(userAgent);
+        loginDeviceService.recordLoginDevice(
+            userDO.getUserId(),
+            token.substring(0, Math.min(32, token.length())),
+            deviceInfo.get("deviceName"),
+            deviceInfo.get("deviceType"),
+            deviceInfo.get("os"),
+            deviceInfo.get("browser"),
+            ipAddress,
+            true
+        );
+        
+        // 记录登录历史
+        loginDeviceService.recordLoginHistory(
+            userDO.getUserId(),
+            deviceInfo.get("deviceName"),
+            ipAddress,
+            "success",
+            "未知"
+        );
+        
         // 返回 Token 和过期时间（86400 秒 = 24 小时）
         return new LoginResponse(token, 86400L);
+    }
+    
+    /**
+     * 解析 User-Agent 获取设备信息
+     * @param userAgent User-Agent 字符串
+     * @return 设备信息 Map
+     */
+    private java.util.Map<String, String> parseUserAgent(String userAgent) {
+        java.util.Map<String, String> info = new java.util.HashMap<>();
+        
+        if (userAgent == null) {
+            userAgent = "";
+        }
+        
+        // 判断设备类型
+        String deviceType = "desktop";
+        String deviceName = "电脑";
+        if (userAgent.toLowerCase().contains("mobile") || userAgent.toLowerCase().contains("android")) {
+            deviceType = "mobile";
+            deviceName = "手机";
+        } else if (userAgent.toLowerCase().contains("ipad")) {
+            deviceType = "tablet";
+            deviceName = "平板";
+        }
+        
+        // 判断操作系统
+        String os = "未知";
+        if (userAgent.toLowerCase().contains("windows")) {
+            os = "Windows";
+        } else if (userAgent.toLowerCase().contains("mac")) {
+            os = "macOS";
+        } else if (userAgent.toLowerCase().contains("linux")) {
+            os = "Linux";
+        } else if (userAgent.toLowerCase().contains("android")) {
+            os = "Android";
+        } else if (userAgent.toLowerCase().contains("ios")) {
+            os = "iOS";
+        }
+        
+        // 判断浏览器
+        String browser = "未知";
+        if (userAgent.toLowerCase().contains("chrome")) {
+            browser = "Chrome";
+        } else if (userAgent.toLowerCase().contains("firefox")) {
+            browser = "Firefox";
+        } else if (userAgent.toLowerCase().contains("safari")) {
+            browser = "Safari";
+        } else if (userAgent.toLowerCase().contains("edge")) {
+            browser = "Edge";
+        } else if (userAgent.toLowerCase().contains("msie") || userAgent.toLowerCase().contains("trident")) {
+            browser = "IE";
+        }
+        
+        info.put("deviceName", deviceName);
+        info.put("deviceType", deviceType);
+        info.put("os", os);
+        info.put("browser", browser);
+        
+        return info;
     }
 
     /**

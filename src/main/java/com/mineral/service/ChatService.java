@@ -3,8 +3,6 @@ package com.mineral.service;
 import cn.hutool.core.util.IdUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.mineral.common.BusinessException;
 import com.mineral.common.ErrorCode;
 import com.mineral.common.PageQuery;
@@ -18,28 +16,25 @@ import com.mineral.entity.DetectionDO;
 import com.mineral.mapper.ChatMessageMapper;
 import com.mineral.mapper.ChatSessionMapper;
 import com.mineral.mapper.DetectionMapper;
-import com.mineral.service.UserStatsService;
+import dev.langchain4j.data.message.ChatMessage;
+import dev.langchain4j.data.message.SystemMessage;
+import dev.langchain4j.data.message.UserMessage;
+import dev.langchain4j.model.chat.ChatLanguageModel;
+import dev.langchain4j.model.chat.StreamingChatLanguageModel;
+import dev.langchain4j.model.chat.response.ChatResponse;
+import dev.langchain4j.model.chat.response.StreamingChatResponseHandler;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Flux;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.stream.Collectors;
 
-/**
- * 聊天会话服务类
- * 处理聊天会话创建、消息管理、会话删除等业务
- */
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -48,21 +43,13 @@ public class ChatService {
     private final ChatSessionMapper chatSessionMapper;
     private final ChatMessageMapper chatMessageMapper;
     private final DetectionMapper detectionMapper;
-    private final WebClient.Builder webClientBuilder;
-    private final ObjectMapper objectMapper;
     private final UserStatsService userStatsService;
-
-    @Value("${ollama.base-url:http://localhost:11434}")
-    private String ollamaBaseUrl;
-
-    @Value("${ollama.model-name:qwen3.5:0.8b}")
-    private String modelName;
+    private final ChatLanguageModel chatLanguageModel;
+    private final StreamingChatLanguageModel streamingChatLanguageModel;
+    private final RagService ragService;
 
     private final DateTimeFormatter dateFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
-    /**
-     * 创建聊天会话
-     */
     @Transactional(rollbackFor = Exception.class)
     public ChatSessionResponse createSession(CreateSessionRequest request, String userId) {
         if (request.getDetectId() != null) {
@@ -86,15 +73,11 @@ public class ChatService {
 
         chatSessionMapper.insert(session);
 
-        // 更新用户统计数据
         userStatsService.updateUserStats(userId, "chat");
 
         return convertToResponse(session);
     }
 
-    /**
-     * 获取用户的会话列表（分页）
-     */
     public PageResult<ChatSessionResponse> getSessions(String userId, PageQuery pageQuery) {
         LambdaQueryWrapper<ChatSessionDO> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(ChatSessionDO::getUserId, userId)
@@ -110,9 +93,6 @@ public class ChatService {
         return PageResult.of(list, resultPage.getTotal(), pageQuery.getPage(), pageQuery.getPageSize());
     }
 
-    /**
-     * 获取会话的所有消息
-     */
     public List<ChatMessageResponse> getSessionMessages(String sessionId, String userId) {
         ChatSessionDO session = chatSessionMapper.selectById(sessionId);
         if (session == null || !session.getUserId().equals(userId)) {
@@ -127,9 +107,6 @@ public class ChatService {
         return messages.stream().map(this::convertToMessageResponse).collect(Collectors.toList());
     }
 
-    /**
-     * 删除会话及其所有消息
-     */
     @Transactional(rollbackFor = Exception.class)
     public void deleteSession(String sessionId, String userId) {
         ChatSessionDO session = chatSessionMapper.selectById(sessionId);
@@ -144,121 +121,93 @@ public class ChatService {
         chatMessageMapper.delete(wrapper);
     }
 
-    /**
-     * 调用 Ollama API 生成回复（流式）
-     * 直接使用 WebClient 调用 Ollama API
-     */
-    public Flux<String> chatWithOllama(String sessionId, String content, String mineralContext) {
-        String systemPrompt = buildSystemPrompt(mineralContext);
-        
-        String userMessage = mineralContext != null && !mineralContext.isEmpty() 
-            ? String.format("[矿物上下文：%s]\n\n用户问题：%s", mineralContext, content)
-            : content;
-        
-        log.info("调用 Ollama API（流式），sessionId={}, userMessage={}", sessionId, userMessage);
-        
-        // 构建请求体
-        Map<String, Object> requestBody = new HashMap<>();
-        requestBody.put("model", modelName);
-        requestBody.put("stream", true);
-        
-        List<Map<String, String>> messages = new ArrayList<>();
-        Map<String, String> systemMsg = new HashMap<>();
-        systemMsg.put("role", "system");
-        systemMsg.put("content", systemPrompt);
-        messages.add(systemMsg);
-        
-        Map<String, String> userMsg = new HashMap<>();
-        userMsg.put("role", "user");
-        userMsg.put("content", userMessage);
-        messages.add(userMsg);
-        
-        requestBody.put("messages", messages);
-        
-        WebClient webClient = webClientBuilder.build();
-        
-        return webClient.post()
-            .uri(ollamaBaseUrl + "/api/chat")
-            .contentType(MediaType.APPLICATION_JSON)
-            .bodyValue(requestBody)
-            .retrieve()
-            .bodyToFlux(String.class)
-            .mapNotNull(response -> {
-                try {
-                    JsonNode node = objectMapper.readTree(response);
-                    JsonNode messageNode = node.get("message");
-                    if (messageNode != null) {
-                        JsonNode contentNode = messageNode.get("content");
-                        if (contentNode != null) {
-                            String token = contentNode.asText();
-                            log.debug("收到 token: {}", token);
-                            return token;
-                        }
-                    }
-                } catch (Exception e) {
-                    log.error("解析响应失败: {}", e.getMessage());
-                }
-                return null;
-            })
-            .filter(token -> token != null && !token.isEmpty())
-            .doOnSubscribe(s -> log.info("开始接收 Ollama 流式响应"))
-            .doOnNext(token -> log.debug("发送 token: {}", token))
-            .doOnComplete(() -> log.info("Ollama 流式响应完成"))
-            .doOnError(e -> log.error("Ollama 流式响应错误: {}", e.getMessage()));
+    public void saveUserMessage(String sessionId, String content) {
+        ChatMessageDO message = new ChatMessageDO();
+        message.setMessageId(IdUtil.getSnowflakeNextIdStr());
+        message.setSessionId(sessionId);
+        message.setRole("user");
+        message.setContent(content);
+        chatMessageMapper.insert(message);
+        ragService.indexMessage(sessionId, "user", content);
+        log.info("保存用户消息: sessionId={}, content={}", sessionId, content);
     }
 
-    /**
-     * 调用 Ollama API 生成回复（阻塞式）
-     */
-    public String chatWithOllamaBlocking(String sessionId, String content, String mineralContext) {
-        String systemPrompt = buildSystemPrompt(mineralContext);
+    public void saveAssistantMessage(String sessionId, String content) {
+        ChatMessageDO message = new ChatMessageDO();
+        message.setMessageId(IdUtil.getSnowflakeNextIdStr());
+        message.setSessionId(sessionId);
+        message.setRole("assistant");
+        message.setContent(content);
+        chatMessageMapper.insert(message);
+        ragService.indexMessage(sessionId, "assistant", content);
+        log.info("保存AI消息: sessionId={}, content={}", sessionId, content);
+    }
+
+    public void updateSessionStats(String sessionId) {
+        ChatSessionDO session = chatSessionMapper.selectById(sessionId);
+        if (session != null) {
+            session.setMessageCount(session.getMessageCount() + 2);
+            session.setLastActiveAt(LocalDateTime.now());
+            chatSessionMapper.updateById(session);
+            log.info("更新会话统计: sessionId={}, messageCount={}", sessionId, session.getMessageCount());
+        }
+    }
+
+    public void validateSession(String sessionId, String userId) {
+        ChatSessionDO session = chatSessionMapper.selectById(sessionId);
+        if (session == null || !session.getUserId().equals(userId)) {
+            throw new BusinessException(ErrorCode.SESSION_NOT_FOUND, "会话不存在");
+        }
+    }
+
+    public Flux<String> chatWithOllama(String sessionId, String content, String mineralContext) {
+        String ragContext = ragService.buildContextWithHistory(content, mineralContext);
+        String systemPrompt = buildSystemPrompt(ragContext);
         
-        String userMessage = mineralContext != null && !mineralContext.isEmpty() 
-            ? String.format("[矿物上下文：%s]\n\n用户问题：%s", mineralContext, content)
-            : content;
-        
-        log.info("调用 Ollama API（阻塞式），sessionId={}, userMessage={}", sessionId, userMessage);
-        
-        // 构建请求体
-        Map<String, Object> requestBody = new HashMap<>();
-        requestBody.put("model", modelName);
-        requestBody.put("stream", false);
-        
-        List<Map<String, String>> messages = new ArrayList<>();
-        Map<String, String> systemMsg = new HashMap<>();
-        systemMsg.put("role", "system");
-        systemMsg.put("content", systemPrompt);
-        messages.add(systemMsg);
-        
-        Map<String, String> userMsg = new HashMap<>();
-        userMsg.put("role", "user");
-        userMsg.put("content", userMessage);
-        messages.add(userMsg);
-        
-        requestBody.put("messages", messages);
-        
-        WebClient webClient = webClientBuilder.build();
-        
-        try {
-            String response = webClient.post()
-                .uri(ollamaBaseUrl + "/api/chat")
-                .contentType(MediaType.APPLICATION_JSON)
-                .bodyValue(requestBody)
-                .retrieve()
-                .bodyToMono(String.class)
-                .block();
-            
-            JsonNode node = objectMapper.readTree(response);
-            JsonNode messageNode = node.get("message");
-            if (messageNode != null) {
-                JsonNode contentNode = messageNode.get("content");
-                if (contentNode != null) {
-                    return contentNode.asText();
+        log.info("调用 LangChain4j 流式 API（RAG增强）， sessionId={}, userMessage={}", sessionId, content);
+
+        List<ChatMessage> messages = new ArrayList<>();
+        messages.add(SystemMessage.from(systemPrompt));
+        messages.add(UserMessage.from(content));
+        return Flux.create(emitter -> {
+            streamingChatLanguageModel.chat(messages, new StreamingChatResponseHandler() {
+                @Override
+                public void onPartialResponse(String partialResponse) {
+                    log.debug("收到 token: {}", partialResponse);
+                    emitter.next(partialResponse);
                 }
-            }
-            return "";
+
+                @Override
+                public void onCompleteResponse(ChatResponse completeResponse) {
+                    log.info("LangChain4j 流式响应完成");
+                    emitter.complete();
+                }
+
+                @Override
+                public void onError(Throwable error) {
+                    log.error("LangChain4j 流式响应错误: {}", error.getMessage(), error);
+                    emitter.error(error);
+                }
+            });
+        });
+    }
+
+    public String chatWithOllamaBlocking(String sessionId, String content, String mineralContext) {
+        String ragContext = ragService.buildContextWithHistory(content, mineralContext);
+        String systemPrompt = buildSystemPrompt(ragContext);
+        
+        log.info("调用 LangChain4j 阻塞式 API（RAG增强） sessionId={}, userMessage={}", sessionId, content);
+
+        List<ChatMessage> messages = new ArrayList<>();
+        messages.add(SystemMessage.from(systemPrompt));
+        messages.add(UserMessage.from(content));
+        try {
+            ChatResponse response = chatLanguageModel.chat(messages);
+            String responseContent = response.aiMessage().text();
+            log.info("LangChain4j 响应: {}", responseContent);
+            return responseContent;
         } catch (Exception e) {
-            log.error("调用 Ollama API 失败: {}", e.getMessage(), e);
+            log.error("调用 LangChain4j API 失败: {}", e.getMessage(), e);
             return "调用 AI 服务失败: " + e.getMessage();
         }
     }
@@ -284,16 +233,17 @@ public class ChatService {
         return response;
     }
 
-    private String buildSystemPrompt(String mineralContext) {
+    private String buildSystemPrompt(String context) {
         StringBuilder sb = new StringBuilder();
-        sb.append("你是一个专业的矿物识别助手，专门帮助用户了解矿物相关知识。\n");
+        sb.append("你是一个专业的矿物识别助手，专门帮助用户了解矿物相关知识。\\n");
         sb.append("请用简洁、准确、友好的中文回答用户的问题。\n");
         
-        if (mineralContext != null && !mineralContext.isEmpty()) {
-            sb.append("当前对话围绕特定矿物展开，请结合以下矿物信息回答：").append(mineralContext).append("\n");
+        if (context != null && !context.isEmpty()) {
+            sb.append("\n以下是相关的上下文信息，请参考这些信息回答用户问题：\n");
+            sb.append(context).append("\n");
         }
         
-        sb.append("如果用户的问题超出你的知识范围，请诚实地告知，不要编造信息。");
+        sb.append("\n如果用户的问题超出你的知识范围，请诚实地告知，不要编造信息。");
         
         return sb.toString();
     }

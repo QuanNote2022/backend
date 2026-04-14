@@ -158,13 +158,14 @@ public class UserController {
     /**
      * 更新用户偏好设置
      * @param request HTTP 请求
-     * @param preferences 用户偏好设置
+     * @param preferences 用户偏好设置（只需传递需要更新的字段）
      * @return 更新结果
      */
     @PutMapping("/preferences")
     public ApiResponse<Void> updateUserPreferences(HttpServletRequest request, 
                                                   @RequestBody UserPreferencesDO preferences) {
         String userId = (String) request.getAttribute("userId");
+        // 只更新非空字段
         userPreferencesService.updateUserPreferences(userId, preferences);
         return ApiResponse.success("更新成功", null);
     }

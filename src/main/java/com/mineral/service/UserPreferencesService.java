@@ -40,22 +40,43 @@ public class UserPreferencesService {
 
     /**
      * 更新用户偏好设置
-     * @param userId 用户ID
-     * @param preferences 用户偏好设置
+     * @param userId 用户 ID
+     * @param preferences 用户偏好设置（只更新非空字段）
      */
     @Transactional(rollbackFor = Exception.class)
     public void updateUserPreferences(String userId, UserPreferencesDO preferences) {
         UserPreferencesDO existing = userPreferencesMapper.selectById(userId);
         if (existing != null) {
-            // 更新现有设置
-            existing.setEmailNotification(preferences.getEmailNotification());
-            existing.setSystemNotification(preferences.getSystemNotification());
-            existing.setTheme(preferences.getTheme());
-            existing.setLanguage(preferences.getLanguage());
+            // 只更新非空字段
+            if (preferences.getEmailNotification() != null) {
+                existing.setEmailNotification(preferences.getEmailNotification());
+            }
+            if (preferences.getSystemNotification() != null) {
+                existing.setSystemNotification(preferences.getSystemNotification());
+            }
+            if (preferences.getTheme() != null) {
+                existing.setTheme(preferences.getTheme());
+            }
+            if (preferences.getLanguage() != null) {
+                existing.setLanguage(preferences.getLanguage());
+            }
             userPreferencesMapper.updateById(existing);
         } else {
             // 创建新设置
             preferences.setUserId(userId);
+            // 为 null 的字段设置默认值
+            if (preferences.getEmailNotification() == null) {
+                preferences.setEmailNotification(true);
+            }
+            if (preferences.getSystemNotification() == null) {
+                preferences.setSystemNotification(true);
+            }
+            if (preferences.getTheme() == null) {
+                preferences.setTheme("light");
+            }
+            if (preferences.getLanguage() == null) {
+                preferences.setLanguage("zh-CN");
+            }
             userPreferencesMapper.insert(preferences);
         }
     }

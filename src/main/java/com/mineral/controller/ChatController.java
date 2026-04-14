@@ -18,11 +18,8 @@ import reactor.core.publisher.Flux;
 import java.io.IOException;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
-/**
- * 聊天控制器
- * 处理聊天会话管理、消息发送等请求
- */
 @Slf4j
 @RestController
 @RequestMapping("/chat")
@@ -31,12 +28,6 @@ public class ChatController {
 
     private final ChatService chatService;
 
-    /**
-     * 创建聊天会话
-     * @param request 创建会话请求
-     * @param httpRequest HTTP 请求（用于获取用户 ID）
-     * @return 创建的会话信息
-     */
     @PostMapping("/session")
     public ApiResponse<ChatSessionResponse> createSession(
             @Valid @RequestBody CreateSessionRequest request,
@@ -46,13 +37,6 @@ public class ChatController {
         return ApiResponse.success("创建成功", response);
     }
 
-    /**
-     * 获取用户会话列表
-     * @param page 当前页码
-     * @param pageSize 每页大小
-     * @param httpRequest HTTP 请求
-     * @return 会话列表（分页）
-     */
     @GetMapping("/sessions")
     public ApiResponse<Object> getSessions(
             @RequestParam(required = false, defaultValue = "1") Integer page,
@@ -68,12 +52,6 @@ public class ChatController {
         return ApiResponse.success(result);
     }
 
-    /**
-     * 获取指定会话的消息列表
-     * @param sessionId 会话 ID
-     * @param httpRequest HTTP 请求
-     * @return 消息列表
-     */
     @GetMapping("/session/{sessionId}/messages")
     public ApiResponse<List<ChatMessageResponse>> getSessionMessages(
             @PathVariable String sessionId,
@@ -83,9 +61,6 @@ public class ChatController {
         return ApiResponse.success(messages);
     }
 
-    /**
-     * 测试 Ollama 连接（阻塞式，用于诊断）
-     */
     @GetMapping("/test-ollama")
     public ApiResponse<String> testOllama() {
         try {
@@ -99,12 +74,6 @@ public class ChatController {
         }
     }
 
-    /**
-     * 删除指定会话
-     * @param sessionId 会话 ID
-     * @param httpRequest HTTP 请求
-     * @return 删除结果
-     */
     @DeleteMapping("/session/{sessionId}")
     public ApiResponse<Void> deleteSession(
             @PathVariable String sessionId,
@@ -114,9 +83,6 @@ public class ChatController {
         return ApiResponse.success("删除成功", null);
     }
 
-    /**
-     * 发送消息（使用 SSE 流式返回）
-     */
     @PostMapping(value = "/session/{sessionId}/send", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public SseEmitter sendMessage(
             @PathVariable String sessionId,
@@ -124,8 +90,15 @@ public class ChatController {
             HttpServletRequest httpRequest) {
         log.info("发送消息：sessionId={}, content={}", sessionId, request.getContent());
         
+        String userId = (String) httpRequest.getAttribute("userId");
+        
+        chatService.validateSession(sessionId, userId);
+        
+        chatService.saveUserMessage(sessionId, request.getContent());
+        
         SseEmitter emitter = new SseEmitter(180_000L);
         AtomicInteger tokenCount = new AtomicInteger(0);
+        AtomicReference<StringBuilder> assistantResponse = new AtomicReference<>(new StringBuilder());
         
         Flux<String> responseFlux = chatService.chatWithOllama(sessionId, request.getContent(), request.getMineralContext());
         
@@ -134,6 +107,7 @@ public class ChatController {
                 try {
                     int count = tokenCount.incrementAndGet();
                     log.info("发送 token #{}: {}", count, token);
+                    assistantResponse.get().append(token);
                     emitter.send(SseEmitter.event()
                         .data("{\"token\": \"" + escapeJson(token) + "\"}"));
                 } catch (IOException e) {
@@ -150,6 +124,9 @@ public class ChatController {
             },
             () -> {
                 log.info("流完成，共发送 {} 个 token", tokenCount.get());
+                String fullResponse = assistantResponse.get().toString();
+                chatService.saveAssistantMessage(sessionId, fullResponse);
+                chatService.updateSessionStats(sessionId);
                 try {
                     emitter.send(SseEmitter.event()
                         .data("{\"done\": true, \"messageId\": \"assistant_" + System.currentTimeMillis() + "\"}"));
