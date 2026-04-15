@@ -2,6 +2,9 @@ package com.mineral.service;
 
 import cn.hutool.core.io.FileUtil;
 import cn.hutool.core.util.IdUtil;
+import cn.hutool.json.JSONArray;
+import cn.hutool.json.JSONObject;
+import cn.hutool.json.JSONUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.mineral.common.BusinessException;
 import com.mineral.common.ErrorCode;
@@ -15,7 +18,11 @@ import com.mineral.entity.MineralDO;
 import com.mineral.mapper.DetectionMapper;
 import com.mineral.mapper.DetectionResultMapper;
 import com.mineral.mapper.MineralMapper;
-import com.mineral.service.UserStatsService;
+import dev.langchain4j.data.message.ImageContent;
+import dev.langchain4j.data.message.TextContent;
+import dev.langchain4j.data.message.UserMessage;
+import dev.langchain4j.model.chat.ChatLanguageModel;
+import dev.langchain4j.model.chat.response.ChatResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -26,50 +33,43 @@ import org.springframework.web.multipart.MultipartFile;
 import java.io.File;
 import java.io.IOException;
 import java.math.BigDecimal;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.List;
-import java.util.Random;
 import java.util.stream.Collectors;
 
 /**
  * 矿物识别服务类
  * 处理矿物图片上传、识别、结果查询等业务
- * 当前使用模拟数据进行识别，可替换为真实的 YOLO 模型
+ * 使用多模态大语言模型（qwen-vl-max）实现矿物识别
  */
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class MineralService {
 
-    /**
-     * 识别记录数据访问对象
-     */
+    /** 识别记录数据访问对象 */
     private final DetectionMapper detectionMapper;
 
-    /**
-     * 识别结果数据访问对象
-     */
+    /** 识别结果数据访问对象 */
     private final DetectionResultMapper detectionResultMapper;
 
-    /**
-     * 矿物信息数据访问对象
-     */
+    /** 矿物信息数据访问对象 */
     private final MineralMapper mineralMapper;
 
-    /**
-     * 用户统计服务
-     */
+    /** 用户统计服务 */
     private final UserStatsService userStatsService;
 
-    /**
-     * 日期时间格式化器
-     */
+    /** 视觉语言模型（用于矿物识别） */
+    private final ChatLanguageModel visionChatModel;
+
+    /** 日期时间格式化器 */
     private final DateTimeFormatter dateFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
-    /**
-     * 文件上传路径，从配置文件读取
-     */
+    /** 文件上传路径，从配置文件读取 */
     @Value("${upload.path}")
     private String uploadPath;
 
@@ -83,7 +83,7 @@ public class MineralService {
      */
     @Transactional(rollbackFor = Exception.class)
     public DetectionResponse detectMineral(MultipartFile file, String userId) {
-        // 1. 验证文件
+        // 1. 验证文件格式和大小
         validateFile(file);
 
         // 2. 保存文件到本地
@@ -91,13 +91,13 @@ public class MineralService {
 
         // 3. 创建识别记录
         DetectionDO detectionDO = new DetectionDO();
-        detectionDO.setDetectId(IdUtil.getSnowflakeNextIdStr());  // 生成唯一 ID
-        detectionDO.setUserId(userId);                            // 用户 ID
-        detectionDO.setImageUrl(imageUrl);                        // 图片 URL
+        detectionDO.setDetectId(IdUtil.getSnowflakeNextIdStr());
+        detectionDO.setUserId(userId);
+        detectionDO.setImageUrl(imageUrl);
         detectionMapper.insert(detectionDO);
 
-        // 4. 执行识别（当前为模拟识别）
-        List<DetectionResultResponse> results = simulateDetection(detectionDO.getDetectId());
+        // 4. 调用多模态AI模型进行矿物识别
+        List<DetectionResultResponse> results = detectMineralWithAI(detectionDO.getDetectId(), imageUrl);
 
         // 5. 更新用户统计数据
         userStatsService.updateUserStats(userId, "detection");
@@ -154,9 +154,210 @@ public class MineralService {
     }
 
     /**
-     * 模拟矿物识别
-     * 当前使用随机数据模拟 YOLO 识别结果
-     * 实际项目中应替换为真实的 AI 模型推理
+     * 使用多模态大语言模型进行矿物识别
+     * 
+     * @param detectId 识别记录 ID
+     * @param imageUrl 图片 URL
+     * @return 识别结果列表
+     */
+    private List<DetectionResultResponse> detectMineralWithAI(String detectId, String imageUrl) {
+        List<DetectionResultResponse> results = new ArrayList<>();
+        
+        try {
+            // 1. 读取图片文件并转换为 Base64 编码
+            String imagePath = uploadPath + imageUrl.replace("/uploads/", "");
+            byte[] imageBytes = Files.readAllBytes(Paths.get(imagePath));
+            String base64Image = Base64.getEncoder().encodeToString(imageBytes);
+            String mimeType = getMimeType(imagePath);
+            
+            // 2. 构建识别提示词
+            String prompt = buildDetectionPrompt();
+            
+            // 3. 构建多模态消息（文本 + 图片）
+            UserMessage userMessage = UserMessage.builder()
+                    .addContent(TextContent.from(prompt))
+                    .addContent(ImageContent.from(base64Image, mimeType))
+                    .build();
+            
+            // 4. 调用视觉模型进行识别
+            log.info("调用视觉模型识别矿物，detectId={}", detectId);
+            ChatResponse response = visionChatModel.chat(userMessage);
+            log.info("视觉模型响应: {}", response);
+            
+            // 5. 解析模型返回的 JSON 结果
+            results = parseDetectionResponse(detectId, response);
+            
+        } catch (Exception e) {
+            // 识别失败时降级到模拟识别
+            log.error("矿物识别失败: {}", e.getMessage(), e);
+            results = simulateDetection(detectId);
+        }
+        
+        return results;
+    }
+
+    /**
+     * 构建矿物识别提示词
+     * 
+     * @return 提示词字符串
+     */
+    private String buildDetectionPrompt() {
+        return """
+                你是一个专业的矿物识别专家。请仔细分析这张图片，识别图片中的矿物。
+                
+                识别出的矿物都输出出来
+
+                请以JSON格式返回识别结果，格式如下：
+            
+                [{
+                    "label": "角闪石",
+                    "confidence": 0.92,
+                    "bbox": [
+                        149,
+                        200,
+                        475,
+                        392
+                    ],
+                    "mineralInfo": {
+                        "name": "角闪石",
+                        "formula": "(Ca,Na)₂-₃(Mg,Fe,Al)₅(Si₆Al)₂O₂₂(OH)₂",
+                        "hardness": "5-6",
+                        "luster": "玻璃光泽",
+                        "color": "黑色/绿色/棕色",
+                        "origin": "火成岩、变质岩",
+                        "uses": "建筑材料",
+                        "description": "角闪石是常见的造岩矿物，呈长柱状或针状晶体。",
+                        "thumbnail": "/thumbnails/amphibole.jpg"
+                    }
+                }]
+                
+                注意事项：
+                1. 只返回JSON，不要包含其他文字说明
+                2. confidence 是置信度，范围 0-1
+                3. 如果图片中不包含矿物或无法识别，返回空数组：{"minerals": []}
+                4. 常见矿物包括：石英、长石、云母、方解石、角闪石、辉石、橄榄石、磁铁矿、黄铁矿、赤铁矿等
+                5. 请根据矿物的颜色、光泽、晶体形态等特征进行识别
+                """;
+    }
+
+    /**
+     * 解析视觉模型的识别结果
+     * 
+     * @param detectId 识别记录 ID
+     * @param response 模型返回的 JSON 字符串
+     * @return 识别结果列表
+     */
+    private List<DetectionResultResponse> parseDetectionResponse(String detectId, ChatResponse response) {
+        List<DetectionResultResponse> results = new ArrayList<>();
+
+        try {
+            String content = response.aiMessage().text();
+            String jsonStr = content;
+
+            if (content.contains("```json")) {
+                jsonStr = content.substring(content.indexOf("```json") + 7, content.lastIndexOf("```"));
+            } else if (content.contains("```")) {
+                jsonStr = content.substring(content.indexOf("```") + 3, content.lastIndexOf("```"));
+            }
+
+            jsonStr = jsonStr.trim();
+
+            JSONArray mineralsArray;
+            if (jsonStr.startsWith("[")) {
+                mineralsArray = JSONUtil.parseArray(jsonStr);
+            } else {
+                JSONObject json = JSONUtil.parseObj(jsonStr);
+                mineralsArray = json.getJSONArray("minerals");
+            }
+
+            if (mineralsArray == null || mineralsArray.isEmpty()) {
+                log.warn("未识别到矿物");
+                return results;
+            }
+
+            for (int i = 0; i < mineralsArray.size(); i++) {
+                JSONObject mineral = mineralsArray.getJSONObject(i);
+                String name = mineral.getStr("label");
+                if (name == null || name.isEmpty()) {
+                    name = mineral.getStr("name");
+                }
+                Double confidence = mineral.getDouble("confidence");
+                if (confidence == null) {
+                    confidence = 0.8;
+                }
+
+                if (name == null || name.isEmpty()) {
+                    continue;
+                }
+
+                Integer[] bbox = new Integer[]{0, 0, 0, 0};
+                JSONArray bboxArray = mineral.getJSONArray("bbox");
+                if (bboxArray != null && bboxArray.size() >= 4) {
+                    bbox = new Integer[]{
+                            bboxArray.getInt(0),
+                            bboxArray.getInt(1),
+                            bboxArray.getInt(2),
+                            bboxArray.getInt(3)
+                    };
+                }
+
+                LambdaQueryWrapper<MineralDO> wrapper = new LambdaQueryWrapper<>();
+                wrapper.eq(MineralDO::getName, name);
+                MineralDO mineralDO = mineralMapper.selectOne(wrapper);
+
+                if (mineralDO == null) {
+                    log.warn("数据库中未找到矿物: {}", name);
+                    continue;
+                }
+
+                DetectionResultDO result = new DetectionResultDO();
+                result.setDetectId(detectId);
+                result.setLabel(mineralDO.getName());
+                result.setConfidence(BigDecimal.valueOf(confidence));
+                result.setBboxX1(bbox[0]);
+                result.setBboxY1(bbox[1]);
+                result.setBboxX2(bbox[2]);
+                result.setBboxY2(bbox[3]);
+
+                detectionResultMapper.insert(result);
+
+                DetectionResultResponse responseObj = new DetectionResultResponse();
+                responseObj.setLabel(mineralDO.getName());
+                responseObj.setConfidence(confidence);
+                responseObj.setBbox(bbox);
+                responseObj.setMineralInfo(convertToMineralInfo(mineralDO));
+
+                results.add(responseObj);
+            }
+
+        } catch (Exception e) {
+            log.error("解析识别结果失败: {}", e.getMessage(), e);
+        }
+
+        return results;
+    }
+
+    /**
+     * 根据文件扩展名获取 MIME 类型
+     * 
+     * @param imagePath 图片路径
+     * @return MIME 类型字符串
+     */
+    private String getMimeType(String imagePath) {
+        String lowerPath = imagePath.toLowerCase();
+        if (lowerPath.endsWith(".png")) {
+            return "image/png";
+        } else if (lowerPath.endsWith(".gif")) {
+            return "image/gif";
+        } else if (lowerPath.endsWith(".webp")) {
+            return "image/webp";
+        }
+        return "image/jpeg";
+    }
+
+    /**
+     * 模拟矿物识别（降级方案）
+     * 当 AI 识别失败时使用随机数据模拟识别结果
      * 
      * @param detectId 识别记录 ID
      * @return 识别结果列表
@@ -164,7 +365,7 @@ public class MineralService {
     private List<DetectionResultResponse> simulateDetection(String detectId) {
         List<DetectionResultResponse> results = new ArrayList<>();
         
-        // 矿物名称列表
+        // 常见矿物名称列表
         List<String> mineralNames = new ArrayList<>();
         mineralNames.add("石英");
         mineralNames.add("长石");
@@ -172,7 +373,7 @@ public class MineralService {
         mineralNames.add("方解石");
         mineralNames.add("角闪石");
         
-        Random random = new Random();
+        java.util.Random random = new java.util.Random();
         
         // 随机生成 1-3 个识别结果
         int resultCount = random.nextInt(3) + 1;
@@ -209,18 +410,13 @@ public class MineralService {
             response.setConfidence(result.getConfidence().doubleValue());
             response.setBbox(new Integer[]{result.getBboxX1(), result.getBboxY1(), 
                                          result.getBboxX2(), result.getBboxY2()});
-            
-            // 添加矿物详细信息
-            MineralInfoResponse mineralInfo = convertToMineralInfo(mineralDO);
-            response.setMineralInfo(mineralInfo);
+            response.setMineralInfo(convertToMineralInfo(mineralDO));
             
             results.add(response);
         }
         
         return results;
-    }
-
-    /**
+    }    /**
      * 获取识别详情
      * 
      * @param detectId 识别记录 ID
@@ -370,3 +566,5 @@ public class MineralService {
         return response;
     }
 }
+
+

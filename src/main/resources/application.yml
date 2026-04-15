@@ -30,6 +30,7 @@ dashscope:
   api-key: sk-5015bbeb6167476d96f4475929274927
   model-name: qwen3.5-flash
   embedding-model-name: text-embedding-v4
+  vision-model-name: qwen3.5-omni-plus-2026-03-15
 
 mybatis-plus:
   configuration:

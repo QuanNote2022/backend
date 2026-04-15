@@ -26,8 +26,11 @@ public class LangChain4jConfig {
     @Value("${dashscope.model-name:qwen3.5-flash}")
     private String modelName;
 
-    @Value("${dashscope.embedding-model-name:qwen3-vl-embedding}")
+    @Value("${dashscope.embedding-model-name:text-embedding-v4}")
     private String embeddingModelName;
+
+    @Value("${dashscope.vision-model-name:qwen-vl-max}")
+    private String visionModelName;
 
     @Bean
     public ChatLanguageModel chatLanguageModel() {
@@ -58,6 +61,17 @@ public class LangChain4jConfig {
                 .baseUrl(baseUrl)
                 .apiKey(apiKey)
                 .modelName(embeddingModelName)
+                .timeout(Duration.ofMinutes(5))
+                .build();
+    }
+
+    @Bean
+    public ChatLanguageModel visionChatModel() {
+        log.info("初始化 LangChain4j VisionChatModel (DashScope), baseUrl={}, model={}", baseUrl, visionModelName);
+        return OpenAiChatModel.builder()
+                .baseUrl(baseUrl)
+                .apiKey(apiKey)
+                .modelName(visionModelName)
                 .timeout(Duration.ofMinutes(5))
                 .build();
     }
