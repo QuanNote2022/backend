@@ -13,9 +13,12 @@ import com.mineral.dto.CreateSessionRequest;
 import com.mineral.entity.ChatMessageDO;
 import com.mineral.entity.ChatSessionDO;
 import com.mineral.entity.DetectionDO;
+import com.mineral.entity.FileDocumentDO;
 import com.mineral.mapper.ChatMessageMapper;
 import com.mineral.mapper.ChatSessionMapper;
 import com.mineral.mapper.DetectionMapper;
+import com.mineral.mapper.FileDocumentMapper;
+import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.data.message.ChatMessage;
 import dev.langchain4j.data.message.SystemMessage;
 import dev.langchain4j.data.message.UserMessage;
@@ -43,6 +46,7 @@ public class ChatService {
     private final ChatSessionMapper chatSessionMapper;
     private final ChatMessageMapper chatMessageMapper;
     private final DetectionMapper detectionMapper;
+    private final FileDocumentMapper fileDocumentMapper;
     private final UserStatsService userStatsService;
     private final ChatLanguageModel chatLanguageModel;
     private final StreamingChatLanguageModel streamingChatLanguageModel;
@@ -59,7 +63,7 @@ public class ChatService {
             }
         }
 
-        String title = request.getMineralName() != null ? 
+        String title = request.getMineralName() != null ?
                 request.getMineralName() + "矿物咨询" : "新会话";
 
         ChatSessionDO session = new ChatSessionDO();
@@ -119,6 +123,10 @@ public class ChatService {
         LambdaQueryWrapper<ChatMessageDO> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(ChatMessageDO::getSessionId, sessionId);
         chatMessageMapper.delete(wrapper);
+
+        LambdaQueryWrapper<FileDocumentDO> docWrapper = new LambdaQueryWrapper<>();
+        docWrapper.eq(FileDocumentDO::getSessionId, sessionId);
+        fileDocumentMapper.delete(docWrapper);
     }
 
     public void saveUserMessage(String sessionId, String content) {
@@ -160,46 +168,92 @@ public class ChatService {
         }
     }
 
-    public Flux<String> chatWithOllama(String sessionId, String content, String mineralContext) {
-        String ragContext = ragService.buildContextWithHistory(content, mineralContext);
+    private List<ChatMessageDO> getSessionHistoryMessages(String sessionId) {
+        LambdaQueryWrapper<ChatMessageDO> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(ChatMessageDO::getSessionId, sessionId)
+                .orderByAsc(ChatMessageDO::getCreatedAt);
+        return chatMessageMapper.selectList(wrapper);
+    }
+
+    public Flux<String> chatWithOllama(String sessionId, String content, String mineralContext, List<String> documentIds) {
+        String ragContext;
+        try {
+            ragContext = ragService.buildContextWithHistoryAndDocuments(content, mineralContext, sessionId);
+        } catch (Exception e) {
+            log.error("构建 RAG 上下文失败: {}", e.getMessage(), e);
+            ragContext = "";
+        }
+
         String systemPrompt = buildSystemPrompt(ragContext);
-        
-        log.info("调用 LangChain4j 流式 API（RAG增强）， sessionId={}, userMessage={}", sessionId, content);
+
+        log.info("调用 LangChain4j 流式 API（RAG增强+文档）， sessionId={}, userMessage={}, documentIds={}", sessionId, content, documentIds);
 
         List<ChatMessage> messages = new ArrayList<>();
         messages.add(SystemMessage.from(systemPrompt));
+
+        try {
+            List<ChatMessageDO> historyMessages = getSessionHistoryMessages(sessionId);
+            for (ChatMessageDO historyMsg : historyMessages) {
+                if ("user".equals(historyMsg.getRole())) {
+                    messages.add(UserMessage.from(historyMsg.getContent()));
+                } else if ("assistant".equals(historyMsg.getRole())) {
+                    messages.add(AiMessage.from(historyMsg.getContent()));
+                }
+            }
+        } catch (Exception e) {
+            log.error("获取历史消息失败: {}", e.getMessage(), e);
+        }
+
         messages.add(UserMessage.from(content));
+
         return Flux.create(emitter -> {
-            streamingChatLanguageModel.chat(messages, new StreamingChatResponseHandler() {
-                @Override
-                public void onPartialResponse(String partialResponse) {
-                    log.debug("收到 token: {}", partialResponse);
-                    emitter.next(partialResponse);
-                }
+            try {
+                streamingChatLanguageModel.chat(messages, new StreamingChatResponseHandler() {
+                    @Override
+                    public void onPartialResponse(String partialResponse) {
+                        log.debug("收到 token: {}", partialResponse);
+                        emitter.next(partialResponse);
+                    }
 
-                @Override
-                public void onCompleteResponse(ChatResponse completeResponse) {
-                    log.info("LangChain4j 流式响应完成");
-                    emitter.complete();
-                }
+                    @Override
+                    public void onCompleteResponse(ChatResponse completeResponse) {
+                        log.info("LangChain4j 流式响应完成");
+                        emitter.complete();
+                    }
 
-                @Override
-                public void onError(Throwable error) {
-                    log.error("LangChain4j 流式响应错误: {}", error.getMessage(), error);
-                    emitter.error(error);
-                }
-            });
+                    @Override
+                    public void onError(Throwable error) {
+                        log.error("LangChain4j 流式响应错误: {}", error.getMessage(), error);
+                        emitter.next("抱歉，AI 服务暂时不可用，请稍后重试。");
+                        emitter.complete();
+                    }
+                });
+            } catch (Exception e) {
+                log.error("调用 LangChain4j API 失败: {}", e.getMessage(), e);
+                emitter.next("抱歉，AI 服务调用失败: " + e.getMessage());
+                emitter.complete();
+            }
         });
     }
 
-    public String chatWithOllamaBlocking(String sessionId, String content, String mineralContext) {
-        String ragContext = ragService.buildContextWithHistory(content, mineralContext);
+    public String chatWithOllamaBlocking(String sessionId, String content, String mineralContext, List<String> documentIds) {
+        String ragContext = ragService.buildContextWithHistoryAndDocuments(content, mineralContext, sessionId);
         String systemPrompt = buildSystemPrompt(ragContext);
-        
-        log.info("调用 LangChain4j 阻塞式 API（RAG增强） sessionId={}, userMessage={}", sessionId, content);
+
+        log.info("调用 LangChain4j 阻塞式 API（RAG增强+文档） sessionId={}, userMessage={}, documentIds={}", sessionId, content, documentIds);
 
         List<ChatMessage> messages = new ArrayList<>();
         messages.add(SystemMessage.from(systemPrompt));
+
+        List<ChatMessageDO> historyMessages = getSessionHistoryMessages(sessionId);
+        for (ChatMessageDO historyMsg : historyMessages) {
+            if ("user".equals(historyMsg.getRole())) {
+                messages.add(UserMessage.from(historyMsg.getContent()));
+            } else if ("assistant".equals(historyMsg.getRole())) {
+                messages.add(AiMessage.from(historyMsg.getContent()));
+            }
+        }
+
         messages.add(UserMessage.from(content));
         try {
             ChatResponse response = chatLanguageModel.chat(messages);
@@ -237,14 +291,14 @@ public class ChatService {
         StringBuilder sb = new StringBuilder();
         sb.append("你是一个专业的矿物识别助手，专门帮助用户了解矿物相关知识。\\n");
         sb.append("请用简洁、准确、友好的中文回答用户的问题。\n");
-        
+
         if (context != null && !context.isEmpty()) {
             sb.append("\n以下是相关的上下文信息，请参考这些信息回答用户问题：\n");
             sb.append(context).append("\n");
         }
-        
+
         sb.append("\n如果用户的问题超出你的知识范围，请诚实地告知，不要编造信息。");
-        
+
         return sb.toString();
     }
 }

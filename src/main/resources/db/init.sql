@@ -112,3 +112,17 @@ INSERT INTO minerals (name, formula, hardness, luster, color, origin, uses, desc
 -- 插入测试用户（密码：123456）
 INSERT INTO users (user_id, username, password_hash, email, nickname, is_active) VALUES
 ('usr_test001', 'testuser', '$2a$10$N.zmdr9k7uOCQb376NoUnuTJ8iDJfLmS1N7K9fKZJ5vLJhQJZqP3G', 'test@example.com', '测试用户', 1);
+
+
+CREATE TABLE `file_documents` (
+                                  `document_id` VARCHAR(64) NOT NULL COMMENT '文档ID',
+                                  `session_id` VARCHAR(64) NOT NULL COMMENT '会话ID',
+                                  `user_id` VARCHAR(64) NOT NULL COMMENT '用户ID',
+                                  `file_name` VARCHAR(255) NOT NULL COMMENT '文件名',
+                                  `file_url` VARCHAR(500) NOT NULL COMMENT '文件访问路径',
+                                  `file_type` VARCHAR(50) NOT NULL COMMENT '文件类型',
+                                  `status` TINYINT DEFAULT 0 COMMENT '索引状态: 0待处理 1已索引',
+                                  `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP,
+                                  PRIMARY KEY (`document_id`),
+                                  KEY `idx_session_id` (`session_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

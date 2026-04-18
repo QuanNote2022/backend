@@ -5,13 +5,16 @@ import com.mineral.dto.ChatMessageResponse;
 import com.mineral.dto.ChatSessionResponse;
 import com.mineral.dto.CreateSessionRequest;
 import com.mineral.dto.SendMessageRequest;
+import com.mineral.entity.FileDocumentDO;
 import com.mineral.service.ChatService;
+import com.mineral.service.DocumentService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import reactor.core.publisher.Flux;
 
@@ -27,6 +30,7 @@ import java.util.concurrent.atomic.AtomicReference;
 public class ChatController {
 
     private final ChatService chatService;
+    private final DocumentService documentService;
 
     @PostMapping("/session")
     public ApiResponse<ChatSessionResponse> createSession(
@@ -43,11 +47,11 @@ public class ChatController {
             @RequestParam(required = false, defaultValue = "10") Integer pageSize,
             HttpServletRequest httpRequest) {
         String userId = (String) httpRequest.getAttribute("userId");
-        
+
         com.mineral.common.PageQuery pageQuery = new com.mineral.common.PageQuery();
         pageQuery.setPage(page);
         pageQuery.setPageSize(pageSize);
-        
+
         Object result = chatService.getSessions(userId, pageQuery);
         return ApiResponse.success(result);
     }
@@ -65,7 +69,7 @@ public class ChatController {
     public ApiResponse<String> testOllama() {
         try {
             log.info("开始测试 Ollama 连接（阻塞式）");
-            String response = chatService.chatWithOllamaBlocking("test-session", "Hello, 请回复'测试成功'", null);
+            String response = chatService.chatWithOllamaBlocking("test-session", "Hello, 请回复'测试成功'", null, null);
             log.info("Ollama 响应: {}", response);
             return ApiResponse.success("Ollama 连接正常", response);
         } catch (Exception e) {
@@ -83,25 +87,58 @@ public class ChatController {
         return ApiResponse.success("删除成功", null);
     }
 
+    @PostMapping(value = "/session/{sessionId}/documents", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ApiResponse<FileDocumentDO> uploadDocument(
+            @PathVariable String sessionId,
+            @RequestParam("file") MultipartFile file,
+            HttpServletRequest httpRequest) {
+        String userId = (String) httpRequest.getAttribute("userId");
+        chatService.validateSession(sessionId, userId);
+        FileDocumentDO document = documentService.uploadFile(file, sessionId, userId);
+        documentService.indexDocument(document.getDocumentId());
+        return ApiResponse.success("上传成功", document);
+    }
+
+    @GetMapping("/session/{sessionId}/documents")
+    public ApiResponse<List<FileDocumentDO>> getSessionDocuments(
+            @PathVariable String sessionId,
+            HttpServletRequest httpRequest) {
+        String userId = (String) httpRequest.getAttribute("userId");
+        chatService.validateSession(sessionId, userId);
+        List<FileDocumentDO> documents = documentService.getSessionDocuments(sessionId);
+        return ApiResponse.success(documents);
+    }
+
+    @DeleteMapping("/session/{sessionId}/documents/{documentId}")
+    public ApiResponse<Void> deleteDocument(
+            @PathVariable String sessionId,
+            @PathVariable String documentId,
+            HttpServletRequest httpRequest) {
+        String userId = (String) httpRequest.getAttribute("userId");
+        chatService.validateSession(sessionId, userId);
+        documentService.deleteDocument(documentId);
+        return ApiResponse.success("删除成功", null);
+    }
+
     @PostMapping(value = "/session/{sessionId}/send", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public SseEmitter sendMessage(
             @PathVariable String sessionId,
             @Valid @RequestBody SendMessageRequest request,
             HttpServletRequest httpRequest) {
-        log.info("发送消息：sessionId={}, content={}", sessionId, request.getContent());
-        
+        log.info("发送消息：sessionId={}, content={}, documentIds={}", sessionId, request.getContent(), request.getDocumentIds());
+
         String userId = (String) httpRequest.getAttribute("userId");
-        
+
         chatService.validateSession(sessionId, userId);
-        
+
         chatService.saveUserMessage(sessionId, request.getContent());
-        
+
         SseEmitter emitter = new SseEmitter(180_000L);
         AtomicInteger tokenCount = new AtomicInteger(0);
         AtomicReference<StringBuilder> assistantResponse = new AtomicReference<>(new StringBuilder());
-        
-        Flux<String> responseFlux = chatService.chatWithOllama(sessionId, request.getContent(), request.getMineralContext());
-        
+
+        Flux<String> responseFlux = chatService.chatWithOllama(sessionId, request.getContent(), request.getMineralContext(), request.getDocumentIds());
+
         responseFlux.subscribe(
             token -> {
                 try {
@@ -136,7 +173,7 @@ public class ChatController {
                 }
             }
         );
-        
+
         return emitter;
     }
 

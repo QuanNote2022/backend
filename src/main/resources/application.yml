@@ -32,6 +32,16 @@ dashscope:
   embedding-model-name: text-embedding-v4
   vision-model-name: qwen3.5-omni-plus-2026-03-15
 
+embedding:
+  store:
+    # memory, redis
+    type: memory
+    redis:
+      chat-index: chat_history_index
+      chat-prefix: "chat:history:"
+      document-index: document_index
+      document-prefix: "document:"
+
 mybatis-plus:
   configuration:
     map-underscore-to-camel-case: true

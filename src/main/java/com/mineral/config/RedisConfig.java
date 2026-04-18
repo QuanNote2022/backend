@@ -9,6 +9,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Primary;
 import org.springframework.data.redis.connection.RedisStandaloneConfiguration;
 import org.springframework.data.redis.connection.lettuce.LettuceConnectionFactory;
 import org.springframework.data.redis.core.RedisTemplate;
@@ -28,6 +29,21 @@ public class RedisConfig {
 
     @Value("${spring.data.redis.database:0}")
     private int redisDatabase;
+
+    @Value("${embedding.store.type:memory}")
+    private String embeddingStoreType;
+
+    @Value("${embedding.store.redis.chat-index:chat_history_index}")
+    private String chatIndex;
+
+    @Value("${embedding.store.redis.chat-prefix:chat:history:}")
+    private String chatPrefix;
+
+    @Value("${embedding.store.redis.document-index:document_index}")
+    private String documentIndex;
+
+    @Value("${embedding.store.redis.document-prefix:document:}")
+    private String documentPrefix;
 
     @Bean
     public LettuceConnectionFactory redisConnectionFactory() {
@@ -50,20 +66,37 @@ public class RedisConfig {
     }
 
     @Bean
-    public EmbeddingStore<TextSegment> embeddingStore() {
-        log.info("初始化 InMemory EmbeddingStore (开发模式)");
-        return new InMemoryEmbeddingStore<>();
+    @Primary
+    public EmbeddingStore<TextSegment> embeddingStore(EmbeddingModel embeddingModel) {
+        if ("redis".equalsIgnoreCase(embeddingStoreType)) {
+            log.info("使用 Redis EmbeddingStore (聊天消息), index={}, prefix={}", chatIndex, chatPrefix);
+            return RedisEmbeddingStore.builder()
+                    .host(redisHost)
+                    .port(redisPort)
+                    .dimension(embeddingModel.dimension())
+                    .indexName(chatIndex)
+                    .prefix(chatPrefix)
+                    .build();
+        } else {
+            log.info("使用 InMemory EmbeddingStore (聊天消息)");
+            return new InMemoryEmbeddingStore<>();
+        }
     }
 
-//    @Bean
-//    public EmbeddingStore<TextSegment> embeddingStore(EmbeddingModel embeddingModel) {
-//        log.info("初始化 Redis EmbeddingStore");
-//        return RedisEmbeddingStore.builder()
-//                .host(redisHost)
-//                .port(redisPort)
-//                .dimension(embeddingModel.dimension())
-//                .indexName("chat_history_index")
-//                .prefix("chat:history:")
-//                .build();
-//    }
+    @Bean("documentEmbeddingStore")
+    public EmbeddingStore<TextSegment> documentEmbeddingStore(EmbeddingModel embeddingModel) {
+        if ("redis".equalsIgnoreCase(embeddingStoreType)) {
+            log.info("使用 Redis EmbeddingStore (文档), index={}, prefix={}", documentIndex, documentPrefix);
+            return RedisEmbeddingStore.builder()
+                    .host(redisHost)
+                    .port(redisPort)
+                    .dimension(embeddingModel.dimension())
+                    .indexName(documentIndex)
+                    .prefix(documentPrefix)
+                    .build();
+        } else {
+            log.info("使用 InMemory EmbeddingStore (文档)");
+            return new InMemoryEmbeddingStore<>();
+        }
+    }
 }
