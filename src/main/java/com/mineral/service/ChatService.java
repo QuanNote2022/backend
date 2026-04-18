@@ -138,6 +138,68 @@ public class ChatService {
         chatMessageMapper.insert(message);
         ragService.indexMessage(sessionId, "user", content);
         log.info("保存用户消息: sessionId={}, content={}", sessionId, content);
+
+        ChatSessionDO session = chatSessionMapper.selectById(sessionId);
+        if (session != null && "新会话".equals(session.getTitle())) {
+            String newTitle = generateTitleFromContent(content);
+            session.setTitle(newTitle);
+            chatSessionMapper.updateById(session);
+            log.info("更新会话标题: sessionId={}, newTitle={}", sessionId, newTitle);
+        }
+    }
+
+    private String generateTitleFromContent(String content) {
+        if (content == null || content.trim().isEmpty()) {
+            return "新会话";
+        }
+
+        String trimmedContent = content.trim();
+        
+        if (trimmedContent.length() <= 20) {
+            return trimmedContent;
+        }
+
+        String title = trimmedContent;
+
+        String[] prefixes = {
+            "请介绍一下", "介绍一下", "请介绍", "介绍下",
+            "请详细介绍一下", "详细介绍一下", "详细介绍",
+            "我想了解一下", "想了解一下", "我想了解", "想了解",
+            "请问一下", "请问", "帮我", "帮我查一下",
+            "能不能告诉我", "能告诉我", "告诉我",
+            "什么是", "什么是", "什么叫",
+            "如何理解", "怎么理解", "为什么叫"
+        };
+        
+        for (String prefix : prefixes) {
+            if (title.startsWith(prefix)) {
+                title = title.substring(prefix.length()).trim();
+                break;
+            }
+        }
+
+        String[] suffixes = {
+            "的特点", "的特性", "的用途", "的产地", "的性质",
+            "有哪些", "有什么", "是什么", "是怎么样的",
+            "呢", "吗", "啊", "呀"
+        };
+        
+        for (String suffix : suffixes) {
+            if (title.endsWith(suffix)) {
+                title = title.substring(0, title.length() - suffix.length()).trim();
+                break;
+            }
+        }
+
+        if (title.length() > 15) {
+            title = title.substring(0, 15) + "...";
+        }
+
+        if (title.isEmpty()) {
+            title = trimmedContent.substring(0, Math.min(15, trimmedContent.length())) + "...";
+        }
+
+        return title;
     }
 
     public void saveAssistantMessage(String sessionId, String content) {

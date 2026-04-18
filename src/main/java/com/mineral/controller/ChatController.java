@@ -95,7 +95,6 @@ public class ChatController {
         String userId = (String) httpRequest.getAttribute("userId");
         chatService.validateSession(sessionId, userId);
         FileDocumentDO document = documentService.uploadFile(file, sessionId, userId);
-        documentService.indexDocument(document.getDocumentId());
         return ApiResponse.success("上传成功", document);
     }
 
