@@ -299,13 +299,13 @@ public class ChatService {
     }
 
     public String chatWithOllamaBlocking(String sessionId, String content, String mineralContext, List<String> documentIds) {
-        String ragContext = ragService.buildContextWithHistoryAndDocuments(content, mineralContext, sessionId);
-        String systemPrompt = buildSystemPrompt(ragContext);
+//        String ragContext = ragService.buildContextWithHistoryAndDocuments(content, mineralContext, sessionId);
+//        String systemPrompt = buildSystemPrompt(ragContext);
 
         log.info("调用 LangChain4j 阻塞式 API（RAG增强+文档） sessionId={}, userMessage={}, documentIds={}", sessionId, content, documentIds);
 
         List<ChatMessage> messages = new ArrayList<>();
-        messages.add(SystemMessage.from(systemPrompt));
+//        messages.add(SystemMessage.from(systemPrompt));
 
         List<ChatMessageDO> historyMessages = getSessionHistoryMessages(sessionId);
         for (ChatMessageDO historyMsg : historyMessages) {
