@@ -204,40 +204,27 @@ public class MineralService {
     private String buildDetectionPrompt() {
         return """
                 你是一个专业的矿物识别专家。请仔细分析这张图片，识别图片中的矿物。
-                
                 识别出的矿物都输出出来
-
                 请以JSON格式返回识别结果，格式如下：
-            
-                [{
-                    "label": "角闪石",
-                    "confidence": 0.92,
-                    "bbox": [
-                        149,
-                        200,
-                        475,
-                        392
-                    ],
+                {
+                    "label": "矿物名称",
+                    "confidence":"0-1之间的小数"
                     "mineralInfo": {
-                        "name": "角闪石",
-                        "formula": "(Ca,Na)₂-₃(Mg,Fe,Al)₅(Si₆Al)₂O₂₂(OH)₂",
-                        "hardness": "5-6",
-                        "luster": "玻璃光泽",
-                        "color": "黑色/绿色/棕色",
-                        "origin": "火成岩、变质岩",
-                        "uses": "建筑材料",
-                        "description": "角闪石是常见的造岩矿物，呈长柱状或针状晶体。",
-                        "thumbnail": "/thumbnails/amphibole.jpg"
+                        "name": "矿物名称",
+                        "formula": "主要成分化学式",
+                        "hardness": "硬度大小",
+                        "luster": "光泽",
+                        "color": "颜色",
+                        "origin": "矿物形成原因",
+                        "uses": "主要用途",
+                        "description": "简单描述",
                     }
-                }]
-                
+                }
                 注意事项：
                 1. 只返回JSON，不要包含其他文字说明
-                2. confidence 是置信度，范围 0-1
+                2. confidence 是置信度，范围 0-1，你对你判断的准确度
                 3. 如果图片中不包含矿物或无法识别，返回空数组：{"minerals": []}
-                4. 常见矿物包括：石英、长石、云母、方解石、角闪石、辉石、橄榄石、磁铁矿、黄铁矿、赤铁矿等
-                5. 请根据矿物的颜色、光泽、晶体形态等特征进行识别
-                6. bbox要在图片中框出矿物
+                4. 请根据矿物的颜色、光泽、晶体形态等特征进行识别
                 """;
     }
 
@@ -263,73 +250,37 @@ public class MineralService {
 
             jsonStr = jsonStr.trim();
 
-            JSONArray mineralsArray;
-            if (jsonStr.startsWith("[")) {
-                mineralsArray = JSONUtil.parseArray(jsonStr);
-            } else {
-                JSONObject json = JSONUtil.parseObj(jsonStr);
-                mineralsArray = json.getJSONArray("minerals");
-            }
+            log.info("识别结果: {}", jsonStr);
 
-            if (mineralsArray == null || mineralsArray.isEmpty()) {
-                log.warn("未识别到矿物");
-                return results;
-            }
+            // 直接解析外层对象
+            JSONObject resultJson = JSONUtil.parseObj(jsonStr);
+            // 直接获取 mineralInfo 对象
+            JSONObject mineralInfo = resultJson.getJSONObject("mineralInfo");
 
-            for (int i = 0; i < mineralsArray.size(); i++) {
-                JSONObject mineral = mineralsArray.getJSONObject(i);
-                String name = mineral.getStr("label");
-                if (name == null || name.isEmpty()) {
-                    name = mineral.getStr("name");
-                }
-                Double confidence = mineral.getDouble("confidence");
-                if (confidence == null) {
-                    confidence = 0.8;
-                }
+            MineralDO mineralDO = new MineralDO();
+            mineralDO.setName(resultJson.getStr("name", mineralInfo.getStr("name"))); // 兜底使用 name
+            mineralDO.setFormula(mineralInfo.getStr("formula"));
+            mineralDO.setHardness(mineralInfo.getStr("hardness"));
+            mineralDO.setLuster(mineralInfo.getStr("luster"));
+            mineralDO.setColor(mineralInfo.getStr("color"));
+            mineralDO.setOrigin(mineralInfo.getStr("origin"));
+            mineralDO.setUses(mineralInfo.getStr("uses"));
+            mineralDO.setDescription(mineralInfo.getStr("description"));
 
-                if (name == null || name.isEmpty()) {
-                    continue;
-                }
 
-                Integer[] bbox = new Integer[]{0, 0, 0, 0};
-                JSONArray bboxArray = mineral.getJSONArray("bbox");
-                if (bboxArray != null && bboxArray.size() >= 4) {
-                    bbox = new Integer[]{
-                            bboxArray.getInt(0),
-                            bboxArray.getInt(1),
-                            bboxArray.getInt(2),
-                            bboxArray.getInt(3)
-                    };
-                }
+            DetectionResultDO result = new DetectionResultDO();
+            result.setDetectId(detectId);
+            result.setConfidence(BigDecimal.valueOf(resultJson.getDouble("confidence")));
+            result.setLabel(mineralDO.getName());
 
-                LambdaQueryWrapper<MineralDO> wrapper = new LambdaQueryWrapper<>();
-                wrapper.eq(MineralDO::getName, name);
-                MineralDO mineralDO = mineralMapper.selectOne(wrapper);
+            detectionResultMapper.insert(result);
 
-                if (mineralDO == null) {
-                    log.warn("数据库中未找到矿物: {}", name);
-                    continue;
-                }
+            DetectionResultResponse responseObj = new DetectionResultResponse();
+            responseObj.setLabel(mineralDO.getName());
+            responseObj.setConfidence(result.getConfidence().doubleValue());
+            responseObj.setMineralInfo(convertToMineralInfo(mineralDO));
 
-                DetectionResultDO result = new DetectionResultDO();
-                result.setDetectId(detectId);
-                result.setLabel(mineralDO.getName());
-                result.setConfidence(BigDecimal.valueOf(confidence));
-                result.setBboxX1(bbox[0]);
-                result.setBboxY1(bbox[1]);
-                result.setBboxX2(bbox[2]);
-                result.setBboxY2(bbox[3]);
-
-                detectionResultMapper.insert(result);
-
-                DetectionResultResponse responseObj = new DetectionResultResponse();
-                responseObj.setLabel(mineralDO.getName());
-                responseObj.setConfidence(confidence);
-                responseObj.setBbox(bbox);
-                responseObj.setMineralInfo(convertToMineralInfo(mineralDO));
-
-                results.add(responseObj);
-            }
+            results.add(responseObj);
 
         } catch (Exception e) {
             log.error("解析识别结果失败: {}", e.getMessage(), e);
