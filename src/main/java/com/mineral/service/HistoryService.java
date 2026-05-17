@@ -20,6 +20,8 @@ import com.mineral.mapper.ChatSessionMapper;
 import com.mineral.mapper.DetectionMapper;
 import com.mineral.mapper.DetectionResultMapper;
 import com.mineral.mapper.MineralMapper;
+import com.mineral.mapper.UserStatsMapper;
+import com.mineral.entity.UserStatsDO;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -63,6 +65,11 @@ public class HistoryService {
      * 聊天消息数据访问对象
      */
     private final ChatMessageMapper chatMessageMapper;
+
+    /**
+     * 用户统计数据访问对象
+     */
+    private final UserStatsMapper userStatsMapper;
 
     /**
      * 日期时间格式化器
@@ -224,6 +231,22 @@ public class HistoryService {
                         .eq(ChatMessageDO::getSessionId, session.getSessionId()));
             }
             chatSessionMapper.delete(sessionWrapper);
+        }
+
+        // 同步更新 user_stats 表，保持个人中心数据一致
+        UserStatsDO stats = userStatsMapper.selectById(userId);
+        if (stats != null) {
+            if ("detect".equals(type) || "all".equals(type)) {
+                stats.setTotalDetections(0);
+                stats.setMineralTypes(0);
+                stats.setTopMineral(null);
+                stats.setActiveDays(0);
+                stats.setConsecutiveDays(0);
+            }
+            if ("chat".equals(type) || "all".equals(type)) {
+                stats.setTotalChats(0);
+            }
+            userStatsMapper.updateById(stats);
         }
     }
 
