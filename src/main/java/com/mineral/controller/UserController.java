@@ -10,6 +10,7 @@ import com.mineral.dto.UpdateProfileRequest;
 import com.mineral.dto.UserProfileResponse;
 import com.mineral.dto.UserStatsResponse;
 import com.mineral.entity.UserPreferencesDO;
+import com.mineral.service.HistoryService;
 import com.mineral.service.LoginDeviceService;
 import com.mineral.service.UserPreferencesService;
 import com.mineral.service.UserService;
@@ -18,6 +19,8 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.Map;
 
 /**
  * 用户控制器
@@ -32,6 +35,7 @@ public class UserController {
     private final UserStatsService userStatsService;
     private final LoginDeviceService loginDeviceService;
     private final UserPreferencesService userPreferencesService;
+    private final HistoryService historyService;
 
     /**
      * 获取用户资料
@@ -141,6 +145,20 @@ public class UserController {
         long total = 100; // 临时值
         PageResult<LoginHistoryResponse> response = PageResult.of(histories, total, page, pageSize);
         return ApiResponse.success(response);
+    }
+
+    /**
+     * 清除历史记录
+     * @param request HTTP 请求
+     * @param body 请求体（type: detect | chat | all）
+     * @return 操作结果
+     */
+    @DeleteMapping("/history")
+    public ApiResponse<Void> clearHistory(HttpServletRequest request, @RequestBody Map<String, String> body) {
+        String userId = (String) request.getAttribute("userId");
+        String type = body.getOrDefault("type", "all");
+        historyService.clearHistory(userId, type);
+        return ApiResponse.success("清除成功", null);
     }
 
     /**

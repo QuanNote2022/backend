@@ -43,10 +43,10 @@ public class SecurityFilterConfig {
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers(HttpMethod.OPTIONS).permitAll()
                 .requestMatchers("/auth/**").permitAll()
-                .requestMatchers("/mineral/info/**").permitAll()
-                .requestMatchers("/mineral/categories").permitAll()
-                .requestMatchers("/chat/session/*/send").permitAll()
-                .requestMatchers("/chat/test-ollama").permitAll()
+//                .requestMatchers("/mineral/info/**").permitAll()
+//                .requestMatchers("/mineral/categories").permitAll()
+//                .requestMatchers("/chat/session/*/send").permitAll()
+//                .requestMatchers("/chat/test-ollama").permitAll()
                 .anyRequest().authenticated()
             )
             .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);

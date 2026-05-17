@@ -105,7 +105,7 @@ public class JwtUtil {
           } catch (Exception e) {
              // 记录解析失败的日志
             log.error("Parse token error: {}", e.getMessage());
-            return null;
+            throw new RuntimeException("Parse token error", e);
          }
     }
 

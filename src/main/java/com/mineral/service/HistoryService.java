@@ -10,10 +10,12 @@ import com.mineral.dto.DetectionHistoryQuery;
 import com.mineral.dto.DetectionHistoryResponse;
 import com.mineral.dto.DetectionResultResponse;
 import com.mineral.dto.MineralInfoResponse;
+import com.mineral.entity.ChatMessageDO;
 import com.mineral.entity.ChatSessionDO;
 import com.mineral.entity.DetectionDO;
 import com.mineral.entity.DetectionResultDO;
 import com.mineral.entity.MineralDO;
+import com.mineral.mapper.ChatMessageMapper;
 import com.mineral.mapper.ChatSessionMapper;
 import com.mineral.mapper.DetectionMapper;
 import com.mineral.mapper.DetectionResultMapper;
@@ -56,7 +58,12 @@ public class HistoryService {
      * 聊天会话数据访问对象
      */
     private final ChatSessionMapper chatSessionMapper;
-    
+
+    /**
+     * 聊天消息数据访问对象
+     */
+    private final ChatMessageMapper chatMessageMapper;
+
     /**
      * 日期时间格式化器
      * 格式：yyyy-MM-dd HH:mm:ss
@@ -188,6 +195,36 @@ public class HistoryService {
                 .collect(Collectors.toList());
 
         return PageResult.of(list, resultPage.getTotal(), pageQuery.getPage(), pageQuery.getPageSize());
+    }
+
+    /**
+     * 清除用户历史记录
+     *
+     * @param userId 用户 ID
+     * @param type   清除类型：detect（检测记录）、chat（聊天记录）、all（全部）
+     */
+    public void clearHistory(String userId, String type) {
+        if ("detect".equals(type) || "all".equals(type)) {
+            LambdaQueryWrapper<DetectionDO> detectWrapper = new LambdaQueryWrapper<>();
+            detectWrapper.eq(DetectionDO::getUserId, userId);
+            List<DetectionDO> detections = detectionMapper.selectList(detectWrapper);
+            for (DetectionDO detection : detections) {
+                LambdaQueryWrapper<DetectionResultDO> resultWrapper = new LambdaQueryWrapper<>();
+                resultWrapper.eq(DetectionResultDO::getDetectId, detection.getDetectId());
+                detectionResultMapper.delete(resultWrapper);
+            }
+            detectionMapper.delete(detectWrapper);
+        }
+        if ("chat".equals(type) || "all".equals(type)) {
+            LambdaQueryWrapper<ChatSessionDO> sessionWrapper = new LambdaQueryWrapper<>();
+            sessionWrapper.eq(ChatSessionDO::getUserId, userId);
+            List<ChatSessionDO> sessions = chatSessionMapper.selectList(sessionWrapper);
+            for (ChatSessionDO session : sessions) {
+                chatMessageMapper.delete(new LambdaQueryWrapper<ChatMessageDO>()
+                        .eq(ChatMessageDO::getSessionId, session.getSessionId()));
+            }
+            chatSessionMapper.delete(sessionWrapper);
+        }
     }
 
     /**

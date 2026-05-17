@@ -190,7 +190,8 @@ public class MineralService {
         } catch (Exception e) {
             // 识别失败时降级到模拟识别
             log.error("矿物识别失败: {}", e.getMessage(), e);
-            results = simulateDetection(detectId);
+            //results = simulateDetection(detectId);
+            throw new BusinessException("未识别到矿物");
         }
         
         return results;
