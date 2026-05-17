@@ -2,24 +2,16 @@ package com.mineral.controller;
 
 import com.mineral.common.ApiResponse;
 import com.mineral.common.PageResult;
-import com.mineral.dto.AchievementResponse;
-import com.mineral.dto.LoginDeviceResponse;
-import com.mineral.dto.LoginHistoryResponse;
-import com.mineral.dto.UpdatePasswordRequest;
-import com.mineral.dto.UpdateProfileRequest;
-import com.mineral.dto.UserProfileResponse;
-import com.mineral.dto.UserStatsResponse;
+import com.mineral.dto.*;
 import com.mineral.entity.UserPreferencesDO;
-import com.mineral.service.HistoryService;
-import com.mineral.service.LoginDeviceService;
-import com.mineral.service.UserPreferencesService;
-import com.mineral.service.UserService;
-import com.mineral.service.UserStatsService;
+import com.mineral.service.*;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.*;
 import org.springframework.web.bind.annotation.*;
 
+import java.nio.charset.StandardCharsets;
 import java.util.Map;
 
 /**
@@ -145,6 +137,35 @@ public class UserController {
         long total = 100; // 临时值
         PageResult<LoginHistoryResponse> response = PageResult.of(histories, total, page, pageSize);
         return ApiResponse.success(response);
+    }
+
+    /**
+     * 导出用户全部数据
+     * @param request HTTP 请求
+     * @return JSON 文件附件
+     */
+    @GetMapping("/data/export")
+    public ResponseEntity<byte[]> exportData(HttpServletRequest request) {
+        String userId = (String) request.getAttribute("userId");
+        UserDataExport data = userService.exportUserData(userId);
+
+        String json;
+        try {
+            com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+            json = mapper.writeValueAsString(data);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+
+        byte[] bytes = json.getBytes(StandardCharsets.UTF_8);
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        headers.setContentDisposition(ContentDisposition.attachment()
+            .filename("mineral-data-export.json", StandardCharsets.UTF_8)
+            .build());
+        headers.setContentLength(bytes.length);
+
+        return ResponseEntity.ok().headers(headers).body(bytes);
     }
 
     /**

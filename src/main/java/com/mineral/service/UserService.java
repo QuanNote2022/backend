@@ -3,18 +3,19 @@ package com.mineral.service;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.mineral.common.BusinessException;
 import com.mineral.common.ErrorCode;
-import com.mineral.dto.UpdatePasswordRequest;
-import com.mineral.dto.UpdateProfileRequest;
-import com.mineral.dto.UserProfileResponse;
-import com.mineral.entity.UserDO;
-import com.mineral.mapper.UserMapper;
-import com.mineral.service.UserStatsService;
+import com.mineral.dto.*;
+import com.mineral.entity.*;
+import com.mineral.mapper.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.stream.Collectors;
 
 /**
  * 用户服务类
@@ -38,6 +39,10 @@ public class UserService {
      * 用户统计服务
      */
     private final UserStatsService userStatsService;
+    private final DetectionMapper detectionMapper;
+    private final DetectionResultMapper detectionResultMapper;
+    private final ChatSessionMapper chatSessionMapper;
+    private final ChatMessageMapper chatMessageMapper;
 
     /**
      * 日期时间格式化器
@@ -144,5 +149,92 @@ public class UserService {
         // 加密新密码并更新
         userDO.setPasswordHash(passwordEncoder.encode(request.getNewPassword()));
         userMapper.updateById(userDO);
+    }
+
+    /**
+     * 导出用户全部数据
+     * @param userId 用户 ID
+     * @return 用户数据导出对象
+     */
+    public UserDataExport exportUserData(String userId) {
+        UserDataExport export = new UserDataExport();
+        export.setExportedAt(LocalDateTime.now().format(dateFormatter));
+        export.setProfile(getProfile(userId));
+
+        // 导出所有识别记录
+        List<DetectionDO> detections = detectionMapper.selectList(
+            new LambdaQueryWrapper<DetectionDO>()
+                .eq(DetectionDO::getUserId, userId)
+                .orderByDesc(DetectionDO::getCreatedAt)
+        );
+        List<DetectionHistoryResponse> detectionList = new ArrayList<>();
+        for (DetectionDO d : detections) {
+            List<DetectionResultDO> results = detectionResultMapper.selectList(
+                new LambdaQueryWrapper<DetectionResultDO>()
+                    .eq(DetectionResultDO::getDetectId, d.getDetectId())
+            );
+            detectionList.add(convertToHistoryResponse(d, results));
+        }
+        export.setDetections(detectionList);
+
+        // 导出所有问答会话及消息
+        List<ChatSessionDO> sessions = chatSessionMapper.selectList(
+            new LambdaQueryWrapper<ChatSessionDO>()
+                .eq(ChatSessionDO::getUserId, userId)
+                .orderByDesc(ChatSessionDO::getCreatedAt)
+        );
+        List<UserDataExport.ChatSessionExport> sessionExports = new ArrayList<>();
+        for (ChatSessionDO s : sessions) {
+            UserDataExport.ChatSessionExport se = new UserDataExport.ChatSessionExport();
+            se.setSession(convertToSessionResponse(s));
+            List<ChatMessageDO> messages = chatMessageMapper.selectList(
+                new LambdaQueryWrapper<ChatMessageDO>()
+                    .eq(ChatMessageDO::getSessionId, s.getSessionId())
+                    .orderByAsc(ChatMessageDO::getCreatedAt)
+            );
+            se.setMessages(messages.stream().map(this::convertToMessageResponse).collect(Collectors.toList()));
+            sessionExports.add(se);
+        }
+        export.setChatSessions(sessionExports);
+
+        return export;
+    }
+
+    private DetectionHistoryResponse convertToHistoryResponse(DetectionDO d, List<DetectionResultDO> results) {
+        DetectionHistoryResponse r = new DetectionHistoryResponse();
+        r.setDetectId(d.getDetectId());
+        r.setImageUrl(d.getImageUrl());
+        r.setCreatedAt(d.getCreatedAt().format(dateFormatter));
+        List<DetectionResultResponse> resultList = new ArrayList<>();
+        for (DetectionResultDO rr : results) {
+            DetectionResultResponse dr = new DetectionResultResponse();
+            dr.setLabel(rr.getLabel());
+            dr.setConfidence(rr.getConfidence().doubleValue());
+            dr.setBbox(new Integer[]{rr.getBboxX1(), rr.getBboxY1(), rr.getBboxX2(), rr.getBboxY2()});
+            resultList.add(dr);
+        }
+        r.setResults(resultList);
+        return r;
+    }
+
+    private ChatSessionResponse convertToSessionResponse(ChatSessionDO s) {
+        ChatSessionResponse r = new ChatSessionResponse();
+        r.setSessionId(s.getSessionId());
+        r.setTitle(s.getTitle());
+        r.setMineralName(s.getMineralName());
+        r.setMessageCount(s.getMessageCount());
+        r.setLastActiveAt(s.getLastActiveAt() != null ? s.getLastActiveAt().format(dateFormatter) : null);
+        r.setCreatedAt(s.getCreatedAt().format(dateFormatter));
+        return r;
+    }
+
+    private ChatMessageResponse convertToMessageResponse(ChatMessageDO m) {
+        ChatMessageResponse r = new ChatMessageResponse();
+        r.setMessageId(m.getMessageId());
+        r.setSessionId(m.getSessionId());
+        r.setRole(m.getRole());
+        r.setContent(m.getContent());
+        r.setCreatedAt(m.getCreatedAt().format(dateFormatter));
+        return r;
     }
 }
