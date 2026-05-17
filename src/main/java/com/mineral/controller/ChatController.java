@@ -161,15 +161,19 @@ public class ChatController {
             () -> {
                 log.info("流完成，共发送 {} 个 token", tokenCount.get());
                 String fullResponse = assistantResponse.get().toString();
-                chatService.saveAssistantMessage(sessionId, fullResponse);
-                chatService.updateSessionStats(sessionId);
+                try {
+                    chatService.saveAssistantMessage(sessionId, fullResponse);
+                    chatService.updateSessionStats(sessionId);
+                } catch (Exception e) {
+                    log.error("保存消息或更新统计失败: {}", e.getMessage(), e);
+                }
                 try {
                     emitter.send(SseEmitter.event()
                         .data("{\"done\": true, \"messageId\": \"assistant_" + System.currentTimeMillis() + "\"}"));
-                    emitter.complete();
                 } catch (IOException e) {
                     log.error("发送完成信号失败: {}", e.getMessage());
                 }
+                emitter.complete();
             }
         );
 
