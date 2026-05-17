@@ -469,6 +469,18 @@ public class MineralService {
      * @return 矿物信息响应
      * @throws BusinessException 矿物信息不存在时抛出
      */
+    /**
+     * 根据关键词搜索矿物
+     * @param keyword 搜索关键词
+     * @return 匹配的矿物信息列表（最多 5 条）
+     */
+    public List<MineralInfoResponse> searchMinerals(String keyword) {
+        LambdaQueryWrapper<MineralDO> wrapper = new LambdaQueryWrapper<>();
+        wrapper.like(MineralDO::getName, keyword).last("LIMIT 5");
+        List<MineralDO> list = mineralMapper.selectList(wrapper);
+        return list.stream().map(this::convertToMineralInfo).collect(Collectors.toList());
+    }
+
     public MineralInfoResponse getMineralInfo(String mineralName) {
         // 根据名称查询矿物
         LambdaQueryWrapper<MineralDO> wrapper = new LambdaQueryWrapper<>();

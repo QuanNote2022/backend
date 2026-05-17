@@ -97,6 +97,22 @@ public class ChatService {
         return PageResult.of(list, resultPage.getTotal(), pageQuery.getPage(), pageQuery.getPageSize());
     }
 
+    /**
+     * 根据关键词搜索用户的会话
+     * @param userId 用户 ID
+     * @param keyword 搜索关键词
+     * @return 匹配的会话列表（最多 5 条）
+     */
+    public List<ChatSessionResponse> searchSessions(String userId, String keyword) {
+        LambdaQueryWrapper<ChatSessionDO> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(ChatSessionDO::getUserId, userId)
+                .like(ChatSessionDO::getTitle, keyword)
+                .orderByDesc(ChatSessionDO::getLastActiveAt)
+                .last("LIMIT 5");
+        List<ChatSessionDO> list = chatSessionMapper.selectList(wrapper);
+        return list.stream().map(this::convertToResponse).collect(Collectors.toList());
+    }
+
     public List<ChatMessageResponse> getSessionMessages(String sessionId, String userId) {
         ChatSessionDO session = chatSessionMapper.selectById(sessionId);
         if (session == null || !session.getUserId().equals(userId)) {
